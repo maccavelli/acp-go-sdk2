@@ -17,6 +17,9 @@
   and `ErrToolCallStreamFinished`, and the example programs' flags; `docs/architecture.md` the Make targets and
   variables, the generator's, the mutation tool's and the scripts' flags, and `opencode.json`; `tools/README.md` the
   tools' flags, with their defaults.
+- Rewrote `docs/README.md`'s "I want to…" table as one row per task a reader comes with, each pointing to the doc or
+  record that answers it now; the Records table stays the index of every record. `tools/README.md` now describes
+  `consumer_probe.py --tree` and `remote.py --host`.
 
 ## v1.36.0 — 2026-11-11
 

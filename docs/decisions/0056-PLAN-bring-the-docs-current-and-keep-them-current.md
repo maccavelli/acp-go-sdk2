@@ -570,12 +570,22 @@ task" by the owner) is a judgment.
 that amendment adds under phase 3's 15 rows, `consumer_probe.py --tree` and `remote.py --host`. Nothing else of
 `tools/README.md` changes in this phase.*
 
+*Amended 2026-11-15 by a deviation in phase 6 (Execution record, "2026-11-15: phase 6", "Deviation"):
+`CHANGELOG.md` joins this phase's files, for one line in its `Unreleased` section, by `RELEASING.md`'s rule "Each
+change adds its line under `## Unreleased` in the same phase as the change" and the owner's standing rule "Always in
+the same commit", relayed by the coordinator. Nothing else of `CHANGELOG.md` changes.*
+
 1. The Records table: every record file has a row, and every MADR and PLAN row's status equals its frontmatter
    `status`. This pair's rows and the 0056 report's row are brought up to date.
 2. The matrix: one row per task a reader comes with, in the reader's words, each pointing to the current record or
    doc for it. The paragraph above it says that the Records table is the complete per-record index, and that a record
    which adds no new task adds no row. Every task the 31 MADRs of the MADR's S1 answer is covered by some row, which
    need not be one per MADR.
+
+   *Annotated 2026-11-15, in phase 6, from the tree at `378779e`:* the 31 are the MADRs that had no row at `77a81cb`,
+   out of the 47 the MADR's S1 counts there. The tree now holds 48 MADR files: those 47 and
+   `0056-MADR-bring-the-docs-current-and-keep-them-current.md`, which the report's S1 adds as the 32nd without a row.
+   Phase 6's record accounts for all 48.
 3. `docs/README.md`'s first line ("Guides are not in the tree yet") stays, as no guide is created.
 
 **Verification**
@@ -586,6 +596,9 @@ that amendment adds under phase 3's 15 rows, `consumer_probe.py --tree` and `rem
 * The execution record lists each task row and the record or doc it points to, and, for each of the 47 MADRs, the
   row that covers its task or the reason it adds none (superseded, or no task of its own). There is no count to
   compare.
+
+  *Annotated 2026-11-15, in phase 6:* 47 is S1's count at `77a81cb`, before this pair. The tree at `378779e` holds 48
+  MADR files, and the record accounts for each of the 48 ("2026-11-15: phase 6").
 * `python3 -B scripts/check_records.py --check-all`, `python3 -B scripts/check_disclosure.py` and markdownlint: exit 0.
 
 **Acceptance:** the index matches the files and their statuses. The matrix has one row per reader task, and every
@@ -1252,3 +1265,311 @@ Provenance: run by a mainstream model at medium effort on the coordinator's brie
   and the hosts' gates were not run. `watch_ci.py`'s 20-minute default and `--settle` and `--every` were not waited
   out; `ci_jobs.py`'s `--created` was run with one value.
 * **Files.** This PLAN only. No `.go` file, workflow, script, `Makefile` or other doc changed.
+
+### 2026-11-15: phase 6
+
+Provenance: run by a strongest-tier model at high effort, as the phase's row prices it, on the coordinator's brief.
+Line numbers in this entry are those of the staged files.
+
+* **Approval.** The owner, 2026-11-15: "Docs phase 6 then pause". By Timing's order (1, 2, 5a, 3, 6, 5b, 4a, 4b) that is
+  phase 6. This phase alone is approved to run. Phases 5b, 4a and 4b are not, and the plan pauses again when it is done.
+* **Base.** `git rev-parse HEAD`: `378779ec5fc937ac87d6718289d268e7c883a5ce`, on `main`. `git status --short` was
+  empty. `git describe --tags --abbrev=0`: `v1.36.0`. `git diff --stat v1.36.0 HEAD -- '*.go' Makefile go.mod` printed
+  nothing. No release step had started: no PLAN but this one is `in-progress` in `docs/README.md`, and no tag is being
+  prepared. `gh run list --commit 378779e` listed one run, the Docs workflow, `success`; the commit changed records
+  alone, so CI's Go workflow does not run on it.
+* **Step 1: the Records table.** A one-off script, not committed (`<scratch>/compare_index.py`), lists the record files
+  under `docs/decisions/` and `docs/reports/`, reads the Records table's rows, and reports a file with no row, a row
+  whose link names no file, a duplicate row, a row whose Number or Kind cell does not match its file name, and a MADR or
+  PLAN row whose Status differs from the file's frontmatter `status`. Before any edit it printed nothing and exited 0:
+  162 files, 162 rows. No row was added or removed and no status changed. The three 0056 rows were brought up to date:
+  the MADR's (its two annotations of 2026-11-15, D1's standard for a flag and question 5's sentence for `Negotiation`),
+  this PLAN's (phase 6 run, the plan paused again) and the report's (its stale rows S1 and S4 fixed by this phase).
+* **Step 2: the matrix.** Its 40 rows are replaced by 44, and a paragraph above them says that each row is a task a
+  reader comes with, pointing to the doc or record that answers it now, that the Records table is the complete
+  per-record index, superseded and historical records included, and that a record which adds no new task adds no row.
+  * **How a row was chosen.** A row is a task in the reader's words. It points to the doc that answers the task now
+    (a `README.md` section, `architecture.md`, `AGENTS.md`, `RELEASING.md`, `tools/README.md` or `CHANGELOG.md`) when
+    one does, and to the current record when the task is to know why and no doc answers it. Where a `README.md`
+    section names the records behind its rules, as "Wire encoding" does (`README.md:532`-`:539`), the row points to the
+    section, and the records are one link further. A row to a record names the record that decides the matter now,
+    never one a later record superseded. Rows run from an SDK user's tasks, through the release history and the
+    protocol audits and the reasons for the module's shape, to work on the repository.
+  * **Rows a reader might dispute, and why they are so.**
+    * Three rows point to `README.md`'s "Closing and limits": closing a connection, the agent process, and bounding what
+      a connection holds. The section holds all three, with no heading of its own for any but "The byte budget". They
+      are three tasks a reader comes with, and one place answers them.
+    * "know what the SDK sends and accepts on the wire" pointed to `architecture.md`. It now points to `README.md`'s
+      "Wire encoding", the user's description of the wire, which names the six records behind it. `architecture.md`
+      stays the target of "understand how this SDK fits together" and of "change the code generator".
+    * The old rows that pointed to a PLAN were tasks to carry out a change that has been made: rename the module, emit
+      with go/ast, apply the separation, apply the Go 1.27.2 and schema 1.25.0 pin, fix the generated output, install
+      the fleet workspace, and the five 0011 PLANs. No reader comes with them now. Each PLAN stays in the Records table.
+      The subjects of the 0011 PLANs are described as they are now in `architecture.md`'s "What it is" (the generator
+      `:152`, its output check `:183`, the protocol table `:206`), the target of "change the code generator".
+    * The report's S4 rows, three tasks that are history phrased as current: "know why the next ACP feature is the
+      remote transport" became "connect to or serve an agent over HTTP or WebSocket", to `README.md`'s "Remote agents",
+      which links `0043-MADR-remote-http-and-websocket-transport.md` (`README.md:1383`). "see whether a Go 1.27.1 floor
+      fits this SDK" and "apply the Go 1.27.2 and schema 1.25.0 pin" became "know why the SDK needs Go 1.26.11 and is
+      built with go1.27.4", to `0055-MADR-pin-go-1-27-4-and-floor-1-26-11.md`, and "install the SDK, and know which Go
+      version it needs", to `README.md`'s "Installation" (`README.md:20`-`:21`).
+    * The audits: `0053-REPORT-acp-1-25-0-completeness-parity-and-adherence.md` is the target of "see how completely the
+      SDK meets the ACP spec, as last audited". Its opening says it re-scores
+      `0016-REPORT-acp-v1-conformance-audit.md` against the tree at `v1.35.0`, so 0016 and
+      `0001-REPORT-go-127-acp-parity.md`'s "how the generated API lines up with the current ACP spec" are no longer
+      the current answer. `0051-REPORT-acp-1-25-0-featureset-coverage-and-three-extensions.md` stays, as "see what the
+      SDK could add beyond the spec, as last assessed": its first item shipped under
+      `0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md`, and 0053 does not reopen the other two.
+      "as last audited" and "as last assessed" say that each is a dated observation.
+    * "read a crash on CI's Windows floor job" points to `0033-MADR-traceback-on-windows-floor-ci.md`, a record and not
+      a doc: no doc says what that job prints on a crash, or why.
+    * "know why this repository has the fleet workspace and library CI" is kept, to
+      `0003-MADR-install-fleet-agent-workspace.md`: no doc gives that reason.
+    * "find a record by its number, or a release's notes" points to the Records table in the same file, so that a
+      reader who comes with a number, or a version, is sent to the index.
+  * **The old matrix's 40 rows, and where each one's information is now.**
+
+    | Old row | Old target | Now |
+    | :--- | :--- | :--- |
+    | know how a connection can slow its peer … | `0044-MADR-…` | "bound what a connection holds when its peer sends faster than it is handled", `README.md`'s "Closing and limits", which links 0044 (`README.md:1115`) |
+    | know why the next ACP feature is the remote transport … | `0043-MADR-…` | S4: "connect to or serve an agent over HTTP or WebSocket", `README.md`'s "Remote agents", which links 0043 (`:1383`) |
+    | know what the two consumers still wait on … | `0041-MADR-…` | history: its PLAN is `complete`. "build an agent or a client …", `README.md`'s "Explore the API", which links 0041 (`:177`); the Records table |
+    | find, for a consumer's code, the SDK API that replaces it … | `0041-REPORT-consumer-adoption-…` | kept, worded "a consumer's own ACP code" |
+    | know how the SDK checks an elicitation form … | `0040-MADR-…` | "ask the user for input, and check a form, its answer or a URL", `README.md`'s "Elicitation", which links 0040 (`:1665`) |
+    | know which five additions to make next for 1.25.0 adopters | `0039-MADR-…` | history: its PLAN is `complete`. "know which packages and names may change in a minor release", `README.md`'s "Stability", which links 0039 as the policy (`:1963`); the Records table |
+    | see whether a Go 1.27.1 floor fits this SDK | `0001-REPORT-…` | S4: the Go rows above; the Records table |
+    | see how the generated API lines up with the current ACP spec | `0001-REPORT-…` | "see how completely the SDK meets the ACP spec, as last audited", 0053; the Records table |
+    | see what the current ACP v1 spec audit found | `0016-REPORT-…` | the same row, 0053, which re-scores 0016 and links it |
+    | see whether the SDK covers ACP schema 1.25.0, and which three extensions … | `0051-REPORT-…` | kept, as "see what the SDK could add beyond the spec, as last assessed" |
+    | see how close the SDK is to full ACP 1.25.0 parity … | `0053-REPORT-…` | kept, as "see how completely the SDK meets the ACP spec, as last audited, and which gaps remain" |
+    | know why Go was accepted at 1.27.2 with schema 1.24.1 | `0002-MADR-…` | superseded: the Go row (0055) and the schema row (0054); the Records table |
+    | know why the schema pin was 1.25.0 | `0004-MADR-…` | superseded: the schema row, 0054, which names 0004 as the stamp it supersedes |
+    | know why the schema pin is 1.31.0, and how a client's system prompt is gated and checked | `0054-MADR-…` | kept |
+    | know why this tree is not the Coder Go SDK | `0005-MADR-…` | kept, worded "know why this module is separate from github.com/coder/acp-go-sdk" |
+    | rename the module off github.com/coder/acp-go-sdk | `0005-PLAN-…` | done; the Records table |
+    | know why the generator uses go/ast instead of Jennifer | `0006-MADR-…` | kept, worded "writes Go with go/ast" |
+    | emit the schema bindings with go/ast | `0006-PLAN-…` | done; the Records table |
+    | keep this SDK self-contained, off the previous module and off Jennifer | `0007-MADR-…` | merged with the next-but-two row: "know why the SDK is self-contained and stays on encoding/json v1", 0007 |
+    | apply the separation from the previous project | `0007-PLAN-…` | done; the Records table |
+    | see whether 0005, 0006, and 0007 hold against the tree | `0008-REPORT-…` | history, a review of the tree of its day; the Records table |
+    | read a go/ast generator that reproduces the Jennifer output | `0008-REPORT-…` | history: the generator is `cmd/generate`, described in `architecture.md` ("change the code generator"); the Records table |
+    | know why the SDK stays on encoding/json v1 | `0007-MADR-…` | merged, as above |
+    | see the v1 and v2 measurements behind that | `0008-REPORT-…` | kept, worded "see the encoding/json v1 and v2 measurements behind that" |
+    | know why the generated output changed after the go/ast port | `0009-MADR-…` | history; "know what the SDK sends and accepts on the wire …", `README.md`'s "Wire encoding", which links 0009 (`:533`) |
+    | see how unset unions, nil required arrays, and union docs were fixed | `0009-PLAN-…` | done; the same row; the Records table |
+    | apply the Go 1.27.2 and schema 1.25.0 pin | `0004-PLAN-…` | S4: done; the Records table |
+    | understand how this fits together | `architecture.md` | kept, worded "how this SDK fits together" |
+    | know what the SDK sends on the wire | `architecture.md` | retargeted to `README.md`'s "Wire encoding" (above) |
+    | know why the user-facing docs were brought up to date | `0010-MADR-…` | history: "know what the docs must cover, and how they are kept current", 0056, which names 0010 as the last whole-tree alignment |
+    | see what is wrong with the code generator and how it would be hardened | `0011-MADR-…` | kept, worded "know why the generator is a validated, schema-driven engine" |
+    | build the generator's resolved schema model | `0011-PLAN-resolved-schema-model.md` | done; "change the code generator", `architecture.md` (`:152`); the Records table |
+    | fix how the generated unions read and write unknown, absent, and null values | `0011-PLAN-wire-fixes.md` | done; "know what the SDK sends and accepts on the wire …", `README.md`'s "Wire encoding" (`:534`); the Records table |
+    | see where the generator keeps the protocol behaviour the schema does not express | `0011-PLAN-protocol-table.md` | "change the code generator", `architecture.md` (`:206`) |
+    | see how the generator checks its output before writing it | `0011-PLAN-safe-output.md` | "change the code generator", `architecture.md` (`:183`) |
+    | see how the generator and the generated SDK are tested | `0011-PLAN-engine-tests.md` | "change the code generator", `architecture.md`; the tests are listed in its "What it is" |
+    | see how each schema keyword reaches the generated Go code | `0012-MADR-…` | kept |
+    | know the rules agents follow in this repository | `AGENTS.md` | kept |
+    | know why this repository has the fleet workspace and library CI | `0003-MADR-…` | kept |
+    | install the fleet workspace and library CI | `0003-PLAN-…` | done; the Records table |
+
+* **Step 3.** `docs/README.md`'s first line is unchanged: `git diff -U0 docs/README.md`'s first hunk starts at line 172.
+* **The two flags in `tools/README.md`** (the owner's ruling "Name both in the next phase"). One sentence each, and nothing
+  else in the file changed (`git diff --numstat`: 2 lines in, 2 out).
+  * Row `:32`, `remote.py tree`: "`--host` names the test host, `linux` or `windows`, whose SSH host or alias
+    `ACP_LINUX_HOST` or `ACP_WINDOWS_HOST` gives; `tree`, `pkg` and `test` each require it, and it has no default".
+    From the code: `tools/remote.py:265`, `:268` and `:275`, `add_argument("--host", choices=sorted(_common.HOST_VARS),
+    required=True)` in each of the three subparsers, with no `default`; `tools/_common.py:18`, `HOST_VARS = {"linux":
+    "ACP_LINUX_HOST", "windows": "ACP_WINDOWS_HOST"}`; `_common.host` (`:28`) reads the variable.
+  * Row `:41`, `consumer_probe.py`: "`--tree DIR` is the tree the `replace` names, by default the repository". From
+    the code: `tools/consumer_probe.py:64`, help "the tree the replace names, such as a planted break's copy (default:
+    the repository)"; `:67`, `tree = Path(args.tree).resolve() if args.tree else _common.repo()`.
+* **The audit for the two flags.** Phase 3's audit (`inventory.py`, with its `judged.json`) was copied into this phase's
+  scratch folder, and the copy's `judged.json` lost the two entries that marked these flags described by reading, as the
+  owner's ruling requires. Phase 3's folder was not changed.
+  * On the unedited tree, the check seen to fail: exit 1, `# 254 items, 2 not described`,
+    `UNDESCRIBED flag: tools/consumer_probe.py --tree`, `UNDESCRIBED flag: tools/remote.py --host`. Nothing else.
+  * After the edit: exit 0, `# 254 items, 0 not described`. With `--all`, the sentences it matched are the two above,
+    at `tools/README.md:41` and `:32`.
+* **The list the Verification asks for: each task row and what it points to** (in table order).
+  1. understand how this SDK fits together: `architecture.md`
+  2. install the SDK, and know which Go version it needs: `README.md#installation`
+  3. write a first client or agent: `README.md#get-started`
+  4. run the example agent and clients: `README.md#try-the-examples`
+  5. build an agent or a client: the interfaces, the update constructors, `Kind()`, the refusal embeds and
+     `clienthost`: `README.md#explore-the-api`
+  6. know what the SDK sends and accepts on the wire: unions, absent and null values, patch fields, a form's property
+     order, absolute paths: `README.md#wire-encoding`
+  7. negotiate capabilities at `initialize`, authenticate, and give an agent a system prompt:
+     `README.md#initialization-and-capabilities`
+  8. cancel a turn, or choose what happens when a prompt arrives while one is running: `README.md#cancellation`
+  9. stream a tool call's output from an agent: `README.md#streaming-a-tool-call`
+  10. close a connection, learn why it ended, and wait for its goroutines: `README.md#closing-and-limits`
+  11. start an agent as a child process or in this process, and stop it with everything it started:
+      `README.md#closing-and-limits`
+  12. bound what a connection holds when its peer sends faster than it is handled: `README.md#closing-and-limits`
+  13. trace, log or authorize messages with middleware, or observe what it does not see:
+      `README.md#middleware-and-observing`
+  14. connect to or serve an agent over HTTP or WebSocket: `README.md#remote-agents`
+  15. know which JSON-RPC error a peer gets, and when: `README.md#errors-on-the-wire`
+  16. ask the user for input, and check a form, its answer or a URL: `README.md#elicitation`
+  17. handle or call extension methods: `README.md#extension-methods`
+  18. test a client or an agent against the other side, or replay a recorded session: `README.md#testing-with-acptest`
+  19. know which packages and names may change in a minor release: `README.md#stability`
+  20. see what changed in a release, what is not released yet, and which version is retracted: `CHANGELOG.md`
+  21. find, for a consumer's own ACP code, the SDK API that replaces it and the release it came in:
+      `0041-REPORT-consumer-adoption-of-v1-21-to-v1-25.md`
+  22. see how completely the SDK meets the ACP spec, as last audited, and which gaps remain:
+      `0053-REPORT-acp-1-25-0-completeness-parity-and-adherence.md`
+  23. see what the SDK could add beyond the spec, as last assessed:
+      `0051-REPORT-acp-1-25-0-featureset-coverage-and-three-extensions.md`
+  24. know why the schema pin is 1.31.0, and how a client's system prompt is gated and checked:
+      `0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md`
+  25. know why the SDK needs Go 1.26.11 and is built with go1.27.4: `0055-MADR-pin-go-1-27-4-and-floor-1-26-11.md`
+  26. know why this module is separate from github.com/coder/acp-go-sdk: `0005-MADR-separate-module-from-coder.md`
+  27. know why the SDK is self-contained and stays on encoding/json v1: `0007-MADR-self-contained-acp-sdk.md`
+  28. see the encoding/json v1 and v2 measurements behind that: `0008-REPORT-self-contained-sdk-review.md`
+  29. know the rules agents follow in this repository: `AGENTS.md`
+  30. know why this repository has the fleet workspace and library CI: `0003-MADR-install-fleet-agent-workspace.md`
+  31. write a decision record, a plan or a report, and number it: `AGENTS.md#records`
+  32. find a record by its number, or a release's notes: the Records table (`#records`)
+  33. check a change before staging it: `AGENTS.md#pre-add-checks`
+  34. know whether a change runs CI or only the Docs workflow: `AGENTS.md#ci-routing`
+  35. read a crash on CI's Windows floor job: `0033-MADR-traceback-on-windows-floor-ci.md`
+  36. run the verification tools: the gates, the test hosts, planted breaks and the release checks: `tools/README.md`
+  37. change the code generator: how it reads the schema, where the protocol rules live, how it checks its output:
+      `architecture.md#what-it-is`
+  38. know why the generator is a validated, schema-driven engine: `0011-MADR-harden-code-generator-engine.md`
+  39. see how each schema keyword reaches the generated Go code: `0012-MADR-schema-fidelity-framework.md`
+  40. know why the generator writes Go with go/ast instead of Jennifer: `0006-MADR-emit-go-with-go-ast.md`
+  41. move the SDK to a new ACP schema version: `RELEASING.md#bump-the-schema-version`
+  42. know what counts as an incompatible change, and how the API is checked:
+      `RELEASING.md#release-notes-and-the-api`
+  43. tag and publish a release, and check it after: `RELEASING.md#tag-and-publish`
+  44. know what the docs must cover, and how they are kept current:
+      `0056-MADR-bring-the-docs-current-and-keep-them-current.md`
+* **Every MADR, and the row that covers its task or the reason it adds none.** The tree holds 48 MADR files (`ls
+  docs/decisions/*-MADR-*.md`); the row numbers are the list's above. "Links" means the row's doc links the record at
+  that line; "states" means the doc states the decision there without linking it, and the record is reached through the
+  Records table.
+
+  | MADR | Covered by | Evidence |
+  | :--- | :--- | :--- |
+  | `0002-MADR-pin-go-1-27-2-and-acp-schema-1-24-1.md` | none of its own: superseded | its Go pin by 0024 (its own annotation), then 0028 and 0055; its schema stamp by 0004, then 0054; its import-path sentence by 0005. The tasks are rows 25 and 24 |
+  | `0003-MADR-install-fleet-agent-workspace.md` | row 30 | its own row |
+  | `0004-MADR-pin-acp-schema-1-25-0.md` | none of its own: superseded | its schema stamp by 0054, whose D1 says it supersedes that stamp; its Go 1.27.2 floor by 0024. The task is row 24 |
+  | `0005-MADR-separate-module-from-coder.md` | row 26 | its own row |
+  | `0006-MADR-emit-go-with-go-ast.md` | row 40 | its own row |
+  | `0007-MADR-self-contained-acp-sdk.md` | row 27 | its own row; row 6's section links it too (`README.md:396`) |
+  | `0009-MADR-fix-generated-output-on-json-v1.md` | row 6 | links, `README.md:533` |
+  | `0010-MADR-align-docs-with-current-tree.md` | none of its own: history | a past whole-tree docs alignment; the docs task now is row 44, and 0056's MADR names 0010 as "the last whole-tree docs alignment" |
+  | `0011-MADR-harden-code-generator-engine.md` | row 38 | its own row; row 6 links it too (`README.md:534`) |
+  | `0012-MADR-schema-fidelity-framework.md` | row 39 | its own row; row 6 links it too (`README.md:535`) |
+  | `0013-MADR-close-phase-6-follow-ups.md` | none of its own: no task of its own | it closed 0011's phase 6: a test of the constructor registry, dead code removed, and the first release-notes report. The generator's tests are row 37's, a release's notes rows 32 and 43's |
+  | `0014-MADR-union-constructors-take-every-required-key.md` | row 6 | links, `README.md:536` |
+  | `0015-MADR-validate-absolute-protocol-paths.md` | row 6 | links, `README.md:537`; its rules are the "Paths" subsection (`README.md:443`) |
+  | `0017-MADR-remediate-acp-v1-conformance-violations.md` | row 15 | links, `README.md:1652`; its cancelled turns are row 8's (`README.md:756`-`:758`) |
+  | `0018-MADR-start-side-connections-after-assignment.md` | row 5 | states, `README.md:125`-`:130` (the connection is set before any handler reads); it changed no exported name, and `NewConnection`'s doc comment says the handler may run before it returns (`connection.go:975`-`:976`) |
+  | `0019-MADR-remediate-debugging-pass-findings.md` | row 15 | links, `README.md:1654` |
+  | `0020-MADR-retract-accidental-v1-tag.md` | row 20 | states, `CHANGELOG.md:36` ("v1.13.0 was retracted (`go.mod`)"); `go.mod:7` gives the reason |
+  | `0021-MADR-resolve-issues-4-and-5-before-v1-14-0.md` | rows 6 and 8 | links, `README.md:539` (patch fields, `:399`); states, `README.md:767` (`WithPromptOverlapPolicy`) |
+  | `0022-MADR-keep-elicitation-property-order-before-v1-15-0.md` | row 6 | states, `README.md:336`-`:340` (`PropertyOrder`) |
+  | `0023-MADR-connection-lifetime-and-test-leaks.md` | row 10 | links, `README.md:939` |
+  | `0024-MADR-go-sdk-best-practices-on-a-go-1-26-9-floor.md` | rows 25 and 42 | its floor policy stands, as 0055 says ("0024's policy and 0028's check stand"), its versions superseded by 0028 and 0055; its API gate is what row 42's section describes (`RELEASING.md:181`-`:184`) |
+  | `0026-MADR-connection-end-cause-and-wait.md` | row 10 | links, `README.md:1085` |
+  | `0027-MADR-agent-process-helper.md` | row 11 | links, `README.md:943` |
+  | `0028-MADR-pin-go-1-27-3-and-floor-1-26-10.md` | none of its own: superseded | its versions by 0055, which says so; its check stands ("0024's policy and 0028's check stand"). The task is row 25 |
+  | `0029-MADR-unix-client-death-pdeathsig.md` | row 11 | links, `README.md:962` |
+  | `0030-MADR-record-initialize-on-arrival.md` | row 7 | states, `README.md:543`-`:547`; `architecture.md:552` names it |
+  | `0031-MADR-verification-tools-in-repository.md` | row 36 | links, `tools/README.md:4` |
+  | `0033-MADR-traceback-on-windows-floor-ci.md` | row 35 | its own row |
+  | `0034-MADR-race-detector-on-windows-ci.md` | row 1 | states, `architecture.md:941`-`:942` ("both modules' tests with `-race` on the Linux and Windows jobs") |
+  | `0036-MADR-session-update-constructors-kind-and-client-refusals.md` | row 5 | states, `README.md:148` (`ClientRefusals`), `:217`ff. (the session-update constructors), `:230` (`SessionUpdate.Kind()`) |
+  | `0037-MADR-align-docs-ci-and-disclosure-gates.md` | row 34 | names it, `AGENTS.md:138` |
+  | `0038-MADR-consumer-helpers-kind-and-agent-refusals.md` | row 5 | states, `README.md:112` (`AgentRefusals`), `:189` (`PickPermissionOption`); `architecture.md:84` links it |
+  | `0039-MADR-five-adopter-additions-on-schema-1-25-0.md` | row 19 | links, `README.md:1963`; its additions are rows 5, 17 and 18's |
+  | `0040-MADR-check-elicitation-forms-answers-and-urls.md` | row 16 | links, `README.md:1665` |
+  | `0041-MADR-close-the-gaps-the-consumers-wait-on.md` | row 5 | links, `README.md:177`; its consumer report is row 21 |
+  | `0042-MADR-in-process-agent-runner.md` | row 11 | links, `README.md:929`, `:1031` |
+  | `0043-MADR-remote-http-and-websocket-transport.md` | row 14 | links, `README.md:1383`; row 19 too (`:1968`) |
+  | `0044-MADR-notification-queue-back-pressure.md` | row 12 | links, `README.md:1115` |
+  | `0045-MADR-notification-queue-byte-budget.md` | row 12 | links, `README.md:1182` |
+  | `0046-MADR-sending-and-receiving-middleware.md` | row 13 | links, `README.md:1215` |
+  | `0047-MADR-pre-add-check-full-coverage.md` | row 33 | names it, `AGENTS.md:116` |
+  | `0048-MADR-create-releases-in-ci.md` | none: `proposed` | not decided and not built. Row 43's `RELEASING.md` describes releases made by hand and does not describe 0048, as this PLAN requires ("What this PLAN does not do") |
+  | `0049-MADR-remediate-the-2026-11-01-debugging-pass.md` | rows 6, 10 and 13 | links, `README.md:295`, `:910`, `:1236` |
+  | `0050-MADR-auth-method-ids-and-the-prompt-result-for-issue-14.md` | row 7 | links, `README.md:648` |
+  | `0052-MADR-agent-tool-call-snapshot-stream-and-message-size-default.md` | row 9 | links, `README.md:826` |
+  | `0054-MADR-adopt-acp-schema-1-31-0-and-client-system-prompts.md` | row 24 | its own row; row 7 links it too (`README.md:748`) |
+  | `0055-MADR-pin-go-1-27-4-and-floor-1-26-11.md` | row 25 | its own row |
+  | `0056-MADR-bring-the-docs-current-and-keep-them-current.md` | row 44 | its own row |
+
+  Ten MADRs have a row of their own, 32 are covered by a row whose doc links or states them, and six add none: three
+  superseded (0002, 0004, 0028), two history or housekeeping (0010, 0013), one `proposed` (0048).
+* **The counts in this PLAN (the coordinator's question 1).** Step 2's "31" and the Verification's "47" are about
+  different sets, both counted by the MADR's S1 at `77a81cb`: 31 is the MADRs with no row then, out of 47, the MADRs
+  then. The tree at `378779e` holds 48 (`ls docs/decisions/*-MADR-*.md | wc -l`), the 48th being this pair's MADR, which
+  the report's S1 counts ("32 of the 48 MADRs"). Neither number was wrong for its set, but the Verification's 47 is
+  stale against the tree. Both places carry a dated annotation (above), and the list accounts for all 48. The MADR's S1
+  is a reading of `77a81cb` and stays true of it, so the MADR is not amended.
+* **Deviation, 2026-11-15: `CHANGELOG.md` joins the phase's files.**
+  * Found: the phase's steps name no `CHANGELOG.md` line, but `RELEASING.md:171`-`:172` says "Each change adds its line
+    under `## Unreleased` in the same phase as the change", and MADR D2 says the `Unreleased` section is one "that each
+    phase adds to, in the same commit as its change". This phase changes what a reader sees: the matrix rewritten, and
+    two flags described. Without a line, `CHANGELOG.md`'s `Unreleased` would be incomplete for this phase.
+  * Decision: one line, under the owner's standing rule "Always in the same commit" (docs outside the phase's files that
+    the phase makes false or incomplete are fixed in the same phase), as the coordinator's brief relays it. The line:
+    "Rewrote `docs/README.md`'s "I want to…" table as one row per task a reader comes with, each pointing to the doc or
+    record that answers it now; the Records table stays the index of every record. `tools/README.md` now describes
+    `consumer_probe.py --tree` and `remote.py --host`."
+  * Files added to the phase: `CHANGELOG.md`, that line alone (the note under phase 6's **Files**). `CHANGELOG.md` is
+    not docs-safe until phase 5b, so the phase needs a heavy run (Verification, below).
+  * The MADR asserts no fact this changes; it is not amended.
+* **Docs step.** Searched `README.md`, `docs/architecture.md`, `AGENTS.md`, `RELEASING.md`, `tools/README.md`,
+  `CHANGELOG.md` and the agent-rule files (`.claude/rules/`, `.codex/rules/`, `.grok/rules/`, `.kilo/agent/`,
+  `.opencode/rules.md`) for a copy of the Records table or the matrix, or a count of records. None holds one. The
+  mentions of `docs/README.md` stay true: `docs/architecture.md:1537` ("ToC and the "I want to…" matrix"), `AGENTS.md:10`
+  and `:103`, `RELEASING.md:178`, `README.md:1977` and `CHANGELOG.md:34`. Nothing else was made false or incomplete,
+  beyond the `CHANGELOG.md` line of the deviation. No Go-file row is opened.
+* **Verification.** Each output went to a scratch file and its exit status was taken before the file was read.
+  * The index script, planted break: on a scratch copy of `docs/README.md` with the
+    `0033-PLAN-traceback-on-windows-floor-ci.md` row removed and the `0048-MADR-create-releases-in-ci.md` row's
+    status changed to `accepted`: exit 1, `MISSING row for file decisions/0033-PLAN-traceback-on-windows-floor-ci.md`,
+    `STATUS decisions/0048-MADR-create-releases-in-ci.md: row 'accepted', frontmatter 'proposed'`.
+  * The index script on the tree, before any edit and after the last: exit 0, no output.
+  * The new links' anchors: `check_records.py --check-all` checks them as GitHub computes anchors. On a scratch clone
+    with this phase's `docs/README.md`, `CHANGELOG.md` and `tools/README.md`: exit 0, no output. With
+    `#streaming-a-tool-call` changed to `#streaming-a-tool-calls` and `../AGENTS.md` to `../AGENT.md`: exit 1,
+    `broken anchor: docs/README.md:192: ../README.md#streaming-a-tool-calls`,
+    `broken relative link: docs/README.md:217: ../AGENT.md#ci-routing`, `2 error(s)`.
+  * The flag audit: before, exit 1 with the two flags; after, exit 0 (above).
+  * `python3 -B scripts/check_records.py --check-all`: exit 0, no output.
+  * `python3 -B scripts/check_disclosure.py`: exit 0, "check-disclosure: 840 tracked file(s), 0 finding(s)".
+  * Offline `markdownlint-cli2` v0.23.2, the version the Makefile pins: exit 0, "Linting: 57 files", "Summary: 0 issues
+    in 0 files".
+  * `python3 -B scripts/check_ci_filters.py --docs-safe docs/README.md tools/README.md CHANGELOG.md
+    docs/decisions/0056-PLAN-bring-the-docs-current-and-keep-them-current.md`: exit 1, "check-ci-filters: not
+    docs-safe: CHANGELOG.md". So the heavy run is needed.
+  * `run-heavy -- make pre-add-check FILES="CHANGELOG.md docs/README.md tools/README.md
+    docs/decisions/0056-PLAN-bring-the-docs-current-and-keep-them-current.md"`, on this Mac: exit 0. It waited 0 s in the
+    queue and ran 120 s, 14:53:03 to 14:55:03 local, after the last edit of `CHANGELOG.md`, `docs/README.md` and
+    `tools/README.md`. `go-precheck`: 0 `.go` files to format; both modules linted, vetted and tested (`-race
+    -shuffle=on`, uncached), tidy and govulncheck, clean. Only this line of this record was written after it; the PLAN
+    is docs-safe and no Go check reads it. The index script, the flag audit, `check_records.py --check-all`,
+    `check_disclosure.py` and markdownlint were run again after this line, with the outputs above.
+* **Not verified.**
+  * That the 44 rows are every task a reader comes with. That is the judgment this phase is priced for; the list above
+    is the evidence, not a measurement.
+  * The anchors as GitHub renders them: `check_records.py` computes them as GitHub does, and no page was viewed.
+  * The two sentences against a run: `remote.py` needs a test host and was not run; its `--host` was read from the
+    source, and phase 3's run recorded the same from `--help` ("`--host` required with choices `linux` and `windows`").
+    `consumer_probe.py --tree` was not run again; phase 3's run recorded it ("the probe `go.mod`'s `replace` names the
+    clone with no flag and the tree copy with `--tree`").
+  * The owner's standing rule "Always in the same commit" is quoted from the coordinator's brief. No record in this
+    repository quotes it.
+  * CI on this change: it is not pushed.
+* **Files.** `docs/README.md` (the matrix, its paragraph, and the three 0056 rows); `tools/README.md` (rows `:32` and
+  `:41`, one sentence each); `CHANGELOG.md` (one line, by the deviation); this PLAN (the notes under phase 6's
+  **Files**, step 2 and Verification, and this record). No `.go` file, workflow, script or `Makefile` changed, and no
+  report.
+* **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard. The plan pauses
+  until the owner says to continue.
