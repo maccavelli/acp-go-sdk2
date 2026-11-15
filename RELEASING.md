@@ -118,20 +118,66 @@ bump's record, with what `unstable` gained and lost
    git push origin vX.Y.Z
    ```
 
-3. Create a GitHub release for the tag. Include a summary of notable changes and
-   reference the upstream ACP schema version. Call out any change to what the SDK
-   sends or accepts on the wire, as the decision records under `docs/decisions/`
-   describe it.
+3. Create a GitHub release for the tag, named for the tag, neither a draft nor a
+   prerelease, and the latest release. Its body is the "Release text" of the
+   release's notes report (see "Release notes and the API"), which includes a
+   summary of notable changes, the upstream ACP schema version, and any change to
+   what the SDK sends or accepts on the wire, as the decision records under
+   `docs/decisions/` describe it. Extract the body with:
+
+   ```bash
+   python3 tools/release_body.py vX.Y.Z REV
+   ```
+
+   `REV` is the release commit. The tool reads the report from git as at `REV`,
+   so the report must be committed. It takes the text under the report's
+   `### vX.Y.Z` heading, up to its `## Sources not in the release text` heading,
+   makes each relative link absolute at the tag, and scans the body for
+   identifiers. It writes `release-body-vX.Y.Z.md` to `.cache/tools/release/`,
+   or to the directory `--out DIR` names. It exits 1 when a link target is
+   missing at `REV` or the scan matches, and 0 otherwise.
+
+4. After the tag is pushed, check the release. CI does not run these; each is run
+   by hand, and each is described in `tools/README.md`:
+
+   ```bash
+   python3 tools/watch_ci.py REV
+   python3 tools/publication.py vX.Y.Z REV BODY
+   python3 tools/consumer.py vX.Y.Z
+   ```
+
+   - `watch_ci.py` waits for every CI run of the commit `REV` (up to 20 minutes
+     for the first, then 30 seconds for others, such as the tag's), watches them
+     to their end, and prints each run and job. It exits 0 only when every run
+     and job succeeded (a skipped job is allowed), 1 when one did not or did not
+     settle in time, and 2 when no run appeared. `--branch B` limits it to that
+     branch's runs; by default it watches every run of the commit.
+   - `publication.py` runs ten checks of the publication on GitHub and the Go
+     module proxy. `REV` is the commit the tag must name, and `BODY` is the
+     file `release_body.py` wrote: the published release's body must equal it. It
+     exits 0 only when every check holds.
+   - `consumer.py` builds a fresh module at the `go` line's version that runs
+     `go get vX.Y.Z` from the proxy with the checksum database on, then builds,
+     runs and tests a program that uses the release. It exits 0 when everything
+     is as required. `vX.Y.Z` must be `v1.36.0` or later.
+
+   `watch_ci.py` and `publication.py` read GitHub through `gh`.
 
 Consumers rely on the `vX.Y.Z` semver tag for `go get`, so ensure the tag is
 pushed before announcing the release.
 
 ## Release notes and the API
 
-- The changelog is the release notes report,
+- `CHANGELOG.md` is the changelog. Each change adds its line under
+  `## Unreleased` in the same phase as the change. The release's PLAN turns
+  `Unreleased` into the version and its date, `## vX.Y.Z — YYYY-MM-DD`, and
+  links the release-notes report from that section. Releases before `v1.36.0`
+  are not listed there; a closing paragraph points to their reports.
+- Each release has a release-notes report,
   `docs/reports/NNNN-REPORT-release-notes-vX-Y-Z.md`, numbered with
-  `python3 scripts/check_records.py --next` and indexed in `docs/README.md`.
-  Its "Release text" section is the GitHub release's body.
+  `python3 scripts/check_records.py --next` and indexed in `docs/README.md`. It
+  keeps its number and its index row. Its "Release text" section is the GitHub
+  release's body, extracted as "Tag and Publish" step 3 says.
 - Each release's notes record what `make api` reports on the release commit
   against the last tag: its compatible and incompatible changes.
 - CI runs the same check on every push and pull request, so an incompatible
@@ -143,6 +189,11 @@ pushed before announcing the release.
 
 - If the new schema introduces breaking changes, update examples and docs in
   the same commit.
+- A change to code names the docs it makes false or newly needs: `README.md`,
+  `docs/architecture.md`, `RELEASING.md`, `tools/README.md`, a package's
+  `doc.go`, the changed names' doc comments, and `CHANGELOG.md`'s `Unreleased`.
+  It changes them in the same commit, and its record says which docs changed,
+  or that none needed to.
 - The helper uses a repository-local Go build cache (`.gocache`) to avoid
   sandbox restrictions in CI and local development. You can delete it with
   `rm -rf .gocache` if needed.

@@ -806,3 +806,90 @@ phase 4b.
 * **Index.** The 0056 PLAN row's text said "one item for the owner"; it now says the owner ruled on it. The MADR
   row and the report row are not false and are not changed.
 * **Commit.** Staged, not committed. The coordinator commits and pushes.
+
+### 2026-11-15: phase 5a
+
+Provenance: run by a mainstream model at medium effort, as the phase's row prices it, on the coordinator's brief.
+
+* **Approval.** The owner, 2026-11-15, after phase 2 and the rulings landed: "Proceed to the next phase of the
+  acp-go-sdk2 docs plan". By Timing's order (1, 2, 5a, 3, 6, 5b, 4a, 4b) that is phase 5a. This phase alone is approved
+  to run; the plan pauses again when it is done.
+* **Base.** `git rev-parse HEAD`: `2be7f24cfcd6080f72ef2e9f13de67e12812c4b7`, on `main`. `git status --short` was
+  empty. `git describe --tags --abbrev=0`: `v1.36.0`, the newest tag, so this phase's section is for it.
+  `git diff --stat v1.36.0..HEAD -- '*.go' Makefile go.mod` printed nothing: no `.go` file, the `Makefile` or `go.mod`
+  changed since `v1.36.0`. The commits since the tag are `77a81cb`, `e67216c`, `632e097`, `f629f8f` and `2be7f24`
+  (records and docs). No release step had started: no PLAN but this one is `in-progress`, and no tag is being prepared.
+* **`CHANGELOG.md` (step 1; new).** Three parts and no more: `## Unreleased`, `## v1.36.0 — 2026-11-11`, and the
+  pointer, set apart by a rule (`---`) and not a heading.
+  * The date: `git for-each-ref --format='%(taggerdate:short)' refs/tags/v1.36.0` printed `2026-11-11`.
+  * The summary is taken from the "Summary" of `docs/reports/0054-REPORT-release-notes-v1-36-0.md` and matches it:
+    57 compatible additions and nothing incompatible against `v1.35.0`; the schema pin `1.25.0` to `1.31.0`; the client
+    system prompt with its gates and its check; one change on the wire, limited to session requests that carry
+    `systemPrompt`; the `go` line to `1.26.11`. The link is relative, to that report.
+  * The pointer's three facts, re-checked on `2be7f24`:
+    * `head -12 docs/reports/0019-REPORT-release-notes-v0-18-0.md` reads "Release notes for v1.14.0, against v0.17.1" and
+      says it was "drafted for `v0.18.0`" and "keeps the file name it is cited by".
+    * `go.mod:7` is `retract v1.13.0 // Published accidentally from an unfinished commit.`
+    * `ls docs/reports | grep release-notes` lists 38 reports, the first being
+      `0013-REPORT-release-notes-v0-15-0.md`; `git tag -l` shows `v0.14.0` and older with no report, `v0.15.0` the
+      earliest with one.
+  * `Unreleased`, three lines, one for each of phases 1, 2 and this one: the defect report (changes no doc and no code);
+    the four corrected statements (W1, W4, W5, W6: `docs/architecture.md` for the terminal output's file name and the two
+    test counts, `README.md` for `example/remote`'s capabilities); and this file, with `RELEASING.md`'s description of it
+    and of the release tools. The third line follows MADR D2 ("an `Unreleased` section that each phase adds to, in the
+    same commit as its change") and the owner's rule that a phase's docs step includes its line. The PLAN's step 1 names
+    phases 1 and 2 only, so this line is a reading of D2, and it is the one line to drop if the owner reads the PLAN
+    narrowly. The rulings entry (records alone) has no line.
+* **`RELEASING.md` (step 2; the three places).**
+  * "Release notes and the API": the sentence "The changelog is the release notes report" is replaced. `CHANGELOG.md` is
+    the changelog; each change adds its line under `## Unreleased` in the same phase; the release's PLAN turns it into
+    `## vX.Y.Z — YYYY-MM-DD` and links the report; releases before `v1.36.0` are not listed and the closing paragraph
+    points to their reports. The report keeps its number, its index row and its "Release text", the release's body.
+  * "Tag and Publish", step 3, and a new step 4. Step 3 gives the body's source, `python3 tools/release_body.py
+    vX.Y.Z REV`. Each statement was read from the tool: it reads the report from git as at `REV` (`report_path`, `body`
+    in `tools/release_body.py`), takes the text under `### vX.Y.Z` up to `## Sources not in the release text`, makes each
+    relative link absolute at the tag, runs `idscan.py` on the body, and writes `release-body-vX.Y.Z.md` to the
+    `--out DIR` directory, default `.cache/tools/release` (`--help`: "default .cache/tools/release"); it exits 1 on a
+    missing link target or a scan match. Step 3's "named for the tag, neither a draft nor a prerelease, and the latest
+    release" is what `publication.py`'s first checks require (`tools/publication.py`, the first three `check` calls).
+    Step 4 lists, after the tag, `python3 tools/watch_ci.py REV`, `python3 tools/publication.py vX.Y.Z REV BODY` and
+    `python3 tools/consumer.py vX.Y.Z`, run by hand. Checked against each `--help`: `watch_ci.py`'s `--branch` (all runs
+    of the commit by default), 20 minutes for the first run, 30 seconds for others, exit 0, 1 and 2; `publication.py`'s
+    three positional arguments, ten checks (counted: release, body, latest, tag, tag on main, CI on main, CI on tag,
+    proxy `.info`, `go list -m @latest`, `go mod download`), exit 0 only when every check holds; `consumer.py`'s
+    `VERSION`, `v1.36.0` or later, its fresh module at the `go` line's version, the proxy and the checksum database. The
+    flags the text mentions are `--out` and `--branch`, each with its meaning and default. `consumer_probe.py` and
+    0048 are not mentioned: the PLAN names three tools, and 0048 stays undescribed.
+  * "Additional Notes": the same-commit rule gains a second bullet, MADR D5's docs step: the docs a code change makes
+    false or newly needs, including `CHANGELOG.md`'s `Unreleased`, changed in the same commit and recorded.
+* **`docs/architecture.md` (step 3).** The "Tree" gains the line `CHANGELOG.md` after `RELEASING.md`. `AGENTS.md` is
+  not changed (step 4).
+* **The one-off script (not committed).** A scratch script reads `git describe --tags --abbrev=0` and the tag's date,
+  compares the `## ` headings with `Unreleased` and `<tag> — <date>`, and checks every relative link against
+  `git ls-files`.
+  * Planted break, on a scratch copy with the `v1.36.0` heading removed and the report link renamed: exit 1,
+    `FINDING: version headings ['Unreleased'] != ['Unreleased', 'v1.36.0 — 2026-11-11']`,
+    `FINDING: link target not a tracked file: docs/reports/0054-REPORT-nope.md`, `2 finding(s)`.
+  * On the real file: exit 0, `0 finding(s); tag v1.36.0, tag date 2026-11-11`.
+* **Docs step.** Searched `README.md`, `docs/architecture.md`, `tools/README.md`, `AGENTS.md`, `docs/README.md`,
+  `RELEASING.md` and every `.go` file for "changelog" and "release notes". No statement says the repository has no
+  changelog or says where the release notes live other than `RELEASING.md` (fixed) and `tools/README.md:38`
+  ("a release's body, from its release-notes report", which stays true). `docs/README.md` indexes no file outside the
+  Records table and its three links, and does not list `RELEASING.md`, so `CHANGELOG.md` gets no index row. Open for
+  phase 5b: `docs/architecture.md:913`-`:919` and `AGENTS.md:96` and `:129` list the docs-safe and link-checked paths
+  without `CHANGELOG.md`, which is right until 5b makes it docs-safe. No Go file is made false.
+* **Verification.** Each output went to a scratch file and its exit status was taken before it was read.
+  * `git diff --cached --numstat`: `CHANGELOG.md` 28/0, `RELEASING.md` 58/7, `docs/README.md` 1/1, `docs/architecture.md` 1/0, before this record; every hunk is described above.
+  * `grep -n 'The changelog is the release notes report' RELEASING.md`: exit 1, no output.
+  * `python3 -B scripts/check_records.py --check-all`: exit 0, no output.
+  * `python3 -B scripts/check_disclosure.py`: exit 0, "840 tracked file(s), 0 finding(s)".
+  * Offline `markdownlint-cli2` v0.23.2, the version the Makefile pins: exit 0, 57 files, 0 issues, `CHANGELOG.md`
+    among them.
+  * `run-heavy -- make pre-add-check FILES="CHANGELOG.md RELEASING.md docs/architecture.md"`: exit 0 (waited in the queue 846 s, ran 136 s, 12:41:12 to 12:43:28 local). `go-precheck`: 0 `.go` files to format; both modules linted, vetted and tested (`-race -shuffle=on`, uncached), tidy and `govulncheck`, all clean.
+* **Not verified.** The release steps themselves were not run; the commands were checked against each tool's source and
+  `--help` and not executed, since each needs a tag or a published release. `CHANGELOG.md`'s links are checked by the
+  one-off script and not by `check_records.py` until phase 5b.
+* **Files.** `CHANGELOG.md` (new); `RELEASING.md`; `docs/architecture.md` (the Tree line); `docs/README.md` (this
+  PLAN's row text); this record. No file outside the phase's list changed, and no deviation was needed.
+* **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard. The plan pauses
+  until the owner says to continue.

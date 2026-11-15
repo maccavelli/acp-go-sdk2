@@ -1412,6 +1412,7 @@ tree, in the user's cache directory, outside the tree; the logs under
 ```text
 README.md                 repository entry; links here
 RELEASING.md              schema bump and release steps
+CHANGELOG.md              the changelog: Unreleased and the newest tag; older releases are in docs/reports/
 AGENTS.md                 agent instructions
 Makefile                  version, test, lint, pre-add-check, fuzz, mutation, docs gates, check-tools
 go.mod                    the SDK module
