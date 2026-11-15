@@ -79,6 +79,10 @@ for both modules among them. That is a heavy run. It runs on this Mac through th
 docs-safe paths (`docs/**`, `AGENTS.md`, `RELEASING.md`, `tools/README.md`, the agent-rule files) runs no Go check:
 `make pre-add-check` given docs-safe files alone runs no Go check, so it is not needed.
 
+*Annotated 2026-11-15, in phase 5b:* from phase 5b's commit `CHANGELOG.md` is docs-safe, so it joins the list in the
+sentence above and is no longer an exception to it. The sentences above are right for the phases before 5b, which is
+how phases 5a and 6 ran. Phases 4a and 4b change `.go` files, so they run the Go checks whatever else they name.
+
 **Commands.** Each command's output goes to a scratch file outside the tree. Its exit status is captured before any
 filter, and the file is read before anything is concluded from it. The one-off audits are scripts in the session's
 scratch directory. They are never committed (MADR D3). Before a phase relies on an audit, the phase runs it on a
@@ -542,6 +546,15 @@ describe those lists), and `scripts/check_records.py` (`UNNUMBERED_DOCS` at `:23
 2. Add `"CHANGELOG.md"` to `UNNUMBERED_DOCS` and to the docstring's list. No other change to either script or
    workflow.
 
+*Annotated 2026-11-15, in phase 5b, from the tree at `175f269`:* `docs/architecture.md`'s description of the lists is
+at `:938`-`:946`, not `:913`-`:919`, and `AGENTS.md` describes them in two places, `:96`-`:97` (the link-checked docs) and
+`:129`-`:130` (the docs-safe paths). Step 1 changed all of them.
+
+*Amended 2026-11-15 by a deviation in phase 5b (Execution record, "2026-11-15: phase 5b", "Deviation"):*
+`CHANGELOG.md` joins this phase's files, for one line in its `Unreleased` section, by `RELEASING.md`'s rule "Each
+change adds its line under `## Unreleased` in the same phase as the change" and the owner's standing rule "Always in
+the same commit", relayed by the coordinator. Nothing else of `CHANGELOG.md` changes.
+
 **Verification**
 
 * `make check-tools`: exit 0. It includes `scripts/check_ci_filters.py`, which requires the workflows to agree.
@@ -574,6 +587,11 @@ that amendment adds under phase 3's 15 rows, `consumer_probe.py --tree` and `rem
 `CHANGELOG.md` joins this phase's files, for one line in its `Unreleased` section, by `RELEASING.md`'s rule "Each
 change adds its line under `## Unreleased` in the same phase as the change" and the owner's standing rule "Always in
 the same commit", relayed by the coordinator. Nothing else of `CHANGELOG.md` changes.*
+
+*Amended 2026-11-15 by a second deviation in phase 5b (Execution record, "2026-11-15: phase 5b", "Deviation"):* step
+2's "No other change to either script" gains one exception: the comment above `UNNUMBERED_DOCS` in
+`scripts/check_records.py`, which lists the docs-safe files, names `CHANGELOG.md` with the others, by the owner's
+standing rule "Always in the same commit", relayed by the coordinator. Nothing else of either script changes.
 
 1. The Records table: every record file has a row, and every MADR and PLAN row's status equals its frontmatter
    `status`. This pair's rows and the 0056 report's row are brought up to date.
@@ -1573,3 +1591,133 @@ Line numbers in this entry are those of the staged files.
   report.
 * **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard. The plan pauses
   until the owner says to continue.
+
+### 2026-11-15: phase 5b
+
+Provenance: run by a mainstream model at medium effort, as the phase's row prices it, on the coordinator's brief. Line
+numbers in this entry are those of the staged files.
+
+* **Approval.** The owner, 2026-11-15: "Run 5b, 4a and 4b through". The coordinator ran phase 5b first, one phase to an
+  agent, and reviews, commits and watches CI before briefing phase 4a. A deviation still stops the phase and goes to the
+  owner.
+* **Base.** `git rev-parse HEAD`: `175f269e7135d0d29a0cf66b05c2733a711a25bc`, on `main`; `git status --short` was empty.
+  Before any edit, `python3 -B scripts/check_ci_filters.py`: exit 0, "0 problem(s)"; and
+  `python3 -B scripts/check_ci_filters.py --docs-safe CHANGELOG.md`: exit 1, "check-ci-filters: not docs-safe:
+  CHANGELOG.md". No `.go` file names `CHANGELOG.md` (`grep -rn CHANGELOG --include=*.go .` printed nothing), so
+  `check_ci_filters.py`'s "readers" part does not forbid ignoring it.
+* **Step 1: the four lists and the three descriptions.** `'CHANGELOG.md'` is added after `'RELEASING.md'` in the same
+  position in each list: `.github/workflows/ci.yml:15` (push `paths-ignore`) and `:27` (pull_request),
+  `.github/workflows/docs.yml:13` (push `paths`) and `:26` (pull_request). The descriptions: `AGENTS.md:97` (the docs
+  `make check-records` checks) and `:130` (CI's `paths-ignore`, "CI routing"), and `docs/architecture.md:938` (the docs
+  `check-records` checks) and `:944` (CI's docs-safe paths). Those two architecture passages were at `:913`-`:919` when
+  the plan was written and are at `:938`-`:946` at `175f269`; a dated annotation under phase 5b's steps records it.
+  `AGENTS.md:97` and `docs/architecture.md:938`-`:944` were re-wrapped to stay under the lines' existing width.
+* **Step 2: the script.** `"CHANGELOG.md"` is added after `"RELEASING.md"` in `UNNUMBERED_DOCS`
+  (`scripts/check_records.py:239`) and in the docstring's list (`:11`-`:12`). The comment above it
+  (`:235`-`:238`) is the one other line of either script that changed, by the second deviation below; no other line of
+  either script or workflow changed.
+* **The file `AGENTS.md` now lists.** CI routing, `AGENTS.md:129`-`:130`: "`paths-ignore` (`docs/**`, `AGENTS.md`,
+  `RELEASING.md`, `CHANGELOG.md`, `tools/README.md` and the agent-rule files)".
+* **Planted breaks, each on a scratch clone of `175f269` (`git clone --quiet`) with this phase's five changed files
+  copied in; nothing in the tree was dirtied.** `<scratch>` is the phase's scratch folder.
+  * Link check, planted: `CHANGELOG.md`'s `(docs/README.md)` changed to `(docs/READMEE.md)` in the clone.
+    `python3 -B scripts/check_records.py --check-all`: exit 1, `broken relative link: CHANGELOG.md:34:
+    docs/READMEE.md`, `1 error(s)`. On the same clone without the break: exit 0, no output.
+  * Link check, control: the same break in a clone with `scripts/check_records.py` as at `175f269` (no
+    `UNNUMBERED_DOCS` change): exit 0, no output. So the edit to `UNNUMBERED_DOCS` is what makes the check read
+    `CHANGELOG.md`; before it, the link was not checked, as phase 5a's record says.
+  * `check_ci_filters.py`, `'CHANGELOG.md'` removed from both of `docs.yml`'s lists alone: exit 1, "docs: Docs' paths
+    are not CI's ignored paths and .github/workflows/docs.yml: missing ['CHANGELOG.md'], extra []" and "tracked: CI
+    ignores CHANGELOG.md, and Docs does not run on it", "2 problem(s)".
+  * The same, removed from both of `ci.yml`'s lists alone: exit 1, "docs: Docs' paths are not CI's ignored paths and
+    .github/workflows/docs.yml: missing [], extra ['CHANGELOG.md']", "1 problem(s)". In that clone `--docs-safe
+    CHANGELOG.md`: exit 1, "not docs-safe: CHANGELOG.md".
+  * Removed from `ci.yml`'s pull_request list alone: exit 1, "filters: CI's push and pull_request paths-ignore differ,
+    or are empty", "1 problem(s)".
+  * `check_ci_filters.py` does not read `AGENTS.md`, `docs/architecture.md` or `check_records.py`, so no break in them
+    can fail it. `AGENTS.md`, `docs/architecture.md` and `UNNUMBERED_DOCS` agree with the workflows by the read
+    above and not by a check.
+* **Does `docs.yml` run the link check on a changelog-only change?** Yes, by its trigger and its steps. A one-off
+  Python call into `check_ci_filters.py`'s own glob matcher (`_matches`) on the real `docs.yml` and `ci.yml`: `docs.yml`
+  push and pull_request `paths` match `CHANGELOG.md` (True, True), and `ci.yml`'s `paths-ignore` match it (True,
+  True), so a push or pull request that touches only `CHANGELOG.md` skips `ci.yml`'s `push` and `pull_request` triggers
+  and starts `docs.yml`. Its one job runs `make markdownlint`, `make check-records` and `make disclosure-check`
+  (`docs.yml:55`-`:57`), and `check-records` runs `--check-all`, which reads `UNNUMBERED_DOCS`. That the GitHub
+  runner reads the lists the same way was not run: it is not pushed.
+* **Does anything else list the docs-safe paths?** Searched `AGENTS.md`, `RELEASING.md`, `README.md`,
+  `docs/architecture.md`, `docs/README.md`, `tools/README.md`, `tools/*.py`, `scripts/*`, `Makefile`, the workflows'
+  comments and the rule files (`.claude/rules/`, `.codex/rules/`, `.grok/rules/`, `.kilo/agent/`, `.opencode/rules.md`)
+  for "docs-safe", "paths-ignore", "agent-rule" and `CHANGELOG`. Only the three descriptions above list the paths. The
+  rest say "docs-safe" without a list (`AGENTS.md:113`, `docs/architecture.md:931`, `scripts/go-precheck.sh:17`,
+  `tools/publication.py`) or read the list from the workflow. The rule files hold no list and no mention of
+  `CHANGELOG.md`.
+* **Phase 6's sentence.** Phase 6's entry says `CHANGELOG.md` "is not docs-safe until phase 5b, so the phase needs a
+  heavy run", and phase 5a's Verification says the same. Each was true when its phase ran, in the order 1, 2, 5a, 3, 6,
+  5b, 4a, 4b, and stays a true statement of that phase, so neither is rewritten. The live sentence for later phases is
+  "Heavy runs" under Timing (`:75`-`:80`), which named `CHANGELOG.md` as the exception and listed the docs-safe paths
+  without it. A dated annotation after it (`:82`-`:84`) says that `CHANGELOG.md` is docs-safe from this phase's commit.
+* **Deviation, 2026-11-15: `CHANGELOG.md` joins the phase's files.**
+  * Found: the phase's steps name no `CHANGELOG.md` line, but `RELEASING.md:171`-`:172` says "Each change adds its line
+    under `## Unreleased` in the same phase as the change", and MADR D2 says `Unreleased` is one "that each phase adds to,
+    in the same commit as its change". This phase changes what a reader sees, since a changelog-only change now runs the
+    Docs workflow, and what a contributor reads in `AGENTS.md`. Without a line `Unreleased` is incomplete for it.
+  * Decision: one line, under the owner's standing rule "Always in the same commit", as the coordinator's brief relays
+    it, and as phase 6 did. `CHANGELOG.md:23`-`:24`: "Made this file docs-safe: a change to `CHANGELOG.md` alone now
+    runs the Docs workflow and not CI's Go suite, and `make check-records` checks its links with the other unnumbered
+    docs."
+  * Files added to the phase: `CHANGELOG.md`, that line alone (the note under phase 5b's steps). The MADR asserts no fact
+    this changes; it is not amended.
+* **Deviation, 2026-11-15 (second): the comment above `UNNUMBERED_DOCS`.**
+  * Found: the first draft of this phase left `scripts/check_records.py:235`-`:238` as it was. That comment says
+    "RELEASING.md, tools/README.md and AGENTS.md are docs-safe, so the Docs workflow, which runs this check, is the one
+    that sees their changes". It was not false, and this phase makes it incomplete, since `CHANGELOG.md` is now
+    docs-safe. The coordinator's review found it. The phase's step 2 says "No other change to either script".
+  * Decision: name `CHANGELOG.md` with the others, under the owner's standing rule "Always in the same commit", as the
+    coordinator's review relays it. Before: `#: RELEASING.md, tools/README.md and AGENTS.md are docs-safe, so the Docs` /
+    `#: workflow, which runs this check, is the one that sees their changes`. After (`:236`-`:237`): `#: RELEASING.md,
+    CHANGELOG.md, tools/README.md and AGENTS.md are docs-safe, so` / `#: the Docs workflow, which runs this check, is
+    the one that sees their changes`. The comment is re-wrapped and nothing else in the file changes.
+  * Searched for the same omission in `scripts/check_ci_filters.py`, `scripts/test_check_ci_filters.py`,
+    `scripts/test_check_records.py`, `scripts/go-precheck.sh`, and the comments of `ci.yml` (`:2`-`:6`) and `docs.yml`
+    (`:2`-`:5`). None lists the docs-safe files or counts them: `check_ci_filters.py` names `README.md` and the
+    `--docs-safe` rule alone, the workflows' comments say "the docs-safe paths" and "the same as docs.yml's paths",
+    and `test_check_records.py:47`, a fixture loop over three files, is code and not a comment. No other comment needed
+    the fix.
+  * Files added to the phase: none new; `scripts/check_records.py` is on its list. The MADR is not amended.
+* **Docs step.** Searched `README.md`, `docs/architecture.md`, `AGENTS.md`, `RELEASING.md`, `tools/README.md`,
+  `docs/README.md`, `CHANGELOG.md`, the rule files and the Go files' comments (none names the docs-safe list). Fixed:
+  `AGENTS.md:97` and `:130`, `docs/architecture.md:938` and `:944` (step 1); the plan's `:75`-`:80` (the annotation).
+  `docs/architecture.md:1491`, the Tree line for `CHANGELOG.md`, stays true. Fixed, by the second
+  deviation: the comment above `UNNUMBERED_DOCS` (`scripts/check_records.py:235`-`:238`), which listed the docs-safe
+  files without `CHANGELOG.md`. Nothing is open.
+* **Verification.** Each output went to a scratch file and its exit status was taken before the file was read. Times are
+  local.
+  * `python3 -B scripts/check_ci_filters.py`: exit 0, "0 problem(s)". `--docs-safe CHANGELOG.md`: exit 0, no output.
+  * `make check-tools`: exit 0, "Ran 41 tests", "OK", and its own `check_ci_filters.py` run "0 problem(s)".
+  * `actionlint` v1.7.12, the version `ci.yml:165` pins, on `ci.yml` and `docs.yml`: exit 0, no output.
+  * `python3 -B scripts/check_records.py --check-all`: exit 0, no output.
+  * `python3 -B scripts/check_disclosure.py`: exit 0, "840 tracked file(s), 0 finding(s)".
+  * Offline `markdownlint-cli2` v0.23.2, the version the Makefile pins: exit 0, "Linting: 57 files", "Summary: 0 issues
+    in 0 files".
+  * `run-heavy -- make pre-add-check FILES=".github/workflows/ci.yml .github/workflows/docs.yml AGENTS.md CHANGELOG.md
+    docs/architecture.md scripts/check_records.py"`, on this Mac, the first run: exit 0, waited 0 s, ran 117 s, 17:21:32
+    to 17:23:29. Superseded: the second deviation edited `scripts/check_records.py` after it.
+  * The same command, the second run, after the last edit of any of those six files: exit 0, waited 0 s, ran 115 s,
+    17:31:45 to 17:33:40. `go-precheck`: 0 `.go` files to format; both modules linted, vetted and tested (`-race
+    -shuffle=on`, uncached), tidy and govulncheck, clean. Only this PLAN and `docs/README.md`, which are docs-safe and
+    which no Go check reads, were written after it. The other checks above were run again after the second deviation,
+    with the same results.
+* **Not verified.**
+  * That GitHub starts `docs.yml` and skips `ci.yml` on a changelog-only push. It is read from the lists and the
+    script's own matcher, and no push was made. CI on this change is not run.
+  * The matcher is `check_ci_filters.py`'s `glob_re`, not GitHub's; for a literal file name at the root they agree.
+  * `docs/architecture.md`, `AGENTS.md` and `UNNUMBERED_DOCS` agree with the workflows by reading, not by a check, since
+    no check reads them.
+  * The owner's standing rule "Always in the same commit" is quoted from the coordinator's brief, as in phase 6.
+* **Files.** `.github/workflows/ci.yml`, `.github/workflows/docs.yml`, `AGENTS.md`, `docs/architecture.md`,
+  `scripts/check_records.py`; `CHANGELOG.md` (one line, by the deviation); `docs/README.md` (this PLAN's row); this
+  PLAN (the annotation at `:82`, the notes under phase 5b's steps, and this record); `scripts/check_records.py` also for
+  its comment, by the second deviation. No `.go` file, test, report or
+  `Makefile` changed.
+* **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard. The plan pauses
+  until the coordinator briefs phase 4a.

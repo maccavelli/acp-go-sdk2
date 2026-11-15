@@ -20,6 +20,8 @@
 - Rewrote `docs/README.md`'s "I want to…" table as one row per task a reader comes with, each pointing to the doc or
   record that answers it now; the Records table stays the index of every record. `tools/README.md` now describes
   `consumer_probe.py --tree` and `remote.py --host`.
+- Made this file docs-safe: a change to `CHANGELOG.md` alone now runs the Docs workflow and not CI's Go suite, and
+  `make check-records` checks its links with the other unnumbered docs.
 
 ## v1.36.0 — 2026-11-11
 

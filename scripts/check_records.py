@@ -8,8 +8,8 @@ Modes:
                  placement, and relative markdown links with their anchors
   --check-all    --check plus link checks for unnumbered docs
                  (docs/guides/**, docs/README.md, docs/architecture.md,
-                 the root README.md, RELEASING.md, tools/README.md and
-                 AGENTS.md)
+                 the root README.md, RELEASING.md, CHANGELOG.md,
+                 tools/README.md and AGENTS.md)
 
 Every mode reads the markdown files git tracks or would, not those it
 ignores; outside a work tree, every one.
@@ -233,10 +233,10 @@ def check_links(path: Path) -> int:
 
 
 #: The unnumbered docs, besides docs/guides/, whose links --check-all checks:
-#: RELEASING.md, tools/README.md and AGENTS.md are docs-safe, so the Docs
-#: workflow, which runs this check, is the one that sees their changes
+#: RELEASING.md, CHANGELOG.md, tools/README.md and AGENTS.md are docs-safe, so
+#: the Docs workflow, which runs this check, is the one that sees their changes
 #: (0049-PLAN-tooling-fixes.md, phase 2, T1).
-UNNUMBERED_DOCS = ("README.md", "docs/README.md", "docs/architecture.md", "RELEASING.md", "tools/README.md", "AGENTS.md")
+UNNUMBERED_DOCS = ("README.md", "docs/README.md", "docs/architecture.md", "RELEASING.md", "CHANGELOG.md", "tools/README.md", "AGENTS.md")
 
 
 def unnumbered_docs() -> list[Path]:

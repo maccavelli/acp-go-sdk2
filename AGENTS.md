@@ -94,8 +94,8 @@ docs/reports/NNNN-GATES-short-slug.md
 - `make check-records` validates naming, pairing, placement, and every
   relative link in the records and the unnumbered docs: the root `README.md`,
   `docs/README.md`, `docs/architecture.md`, `docs/guides/`, `RELEASING.md`,
-  `tools/README.md` and this file. It reads the files git tracks or would,
-  not those `.gitignore` ignores. If Make is absent, run
+  `CHANGELOG.md`, `tools/README.md` and this file. It reads the files git
+  tracks or would, not those `.gitignore` ignores. If Make is absent, run
   `python3 scripts/check_records.py --check-all`.
 - Cite records by full filename, never by number alone. Cite another
   repository's record by repository and filename; a relative link cannot reach
@@ -127,7 +127,7 @@ docs/reports/NNNN-GATES-short-slug.md
 
 - `.github/workflows/ci.yml` runs every check. A change to the docs-safe paths
   alone, its `paths-ignore` (`docs/**`, `AGENTS.md`, `RELEASING.md`,
-  `tools/README.md` and the agent-rule files), runs
+  `CHANGELOG.md`, `tools/README.md` and the agent-rule files), runs
   `.github/workflows/docs.yml` instead: `make markdownlint`,
   `make check-records` and `make disclosure-check`, the targets CI runs too. A
   change to any other file runs CI; a `v*` tag and the schedule always do.

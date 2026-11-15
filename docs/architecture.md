@@ -935,14 +935,14 @@ Checks that guard this:
   except for `goconst`, `gocognit` and `gocyclo`, which `.golangci.yml` excludes
   for `_gen.go` files with the reason. `make check-records` and `make markdownlint`
   check the docs, each reading what git tracks or would, not what `.gitignore`
-  ignores, and `check-records` the links of `RELEASING.md`, `tools/README.md`
-  and `AGENTS.md` too (0049-PLAN-tooling-fixes.md, phase 2), and `make disclosure-check` the tracked text for a real
+  ignores, and `check-records` the links of `RELEASING.md`, `CHANGELOG.md`,
+  `tools/README.md` and `AGENTS.md` too (0049-PLAN-tooling-fixes.md, phase 2), and `make disclosure-check` the tracked text for a real
   user-home path. GitHub Actions runs `.github/workflows/ci.yml`, which also runs
   the root tests with `GOEXPERIMENT=nojsonv2` on Linux, and both modules' tests
   with `-race` on the Linux and Windows jobs.
 - CI ignores a change to the docs-safe paths alone: `docs/**`, `AGENTS.md`,
-  `RELEASING.md`, `tools/README.md` and the agent-rule files under `.claude/`,
-  `.codex/`, `.grok/`, `.kilo/` and `.opencode/`. Those paths, and the workflow
+  `RELEASING.md`, `CHANGELOG.md`, `tools/README.md` and the agent-rule files
+  under `.claude/`, `.codex/`, `.grok/`, `.kilo/` and `.opencode/`. Those paths, and the workflow
   itself, run `.github/workflows/docs.yml`, which runs the same three targets
   as CI's documentation step. A mixed change runs both; a `v*` tag and the
   schedule run CI. The root `README.md` is not docs-safe, since `docs_test.go`
