@@ -25,6 +25,10 @@ const (
 // written and read as JSON with the keys "direction" and "frame", for a
 // golden file of records
 // (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 8).
+//
+// Direction is Sent or Received. Frame is the line that passed, without its
+// newline: in the canonical form Recorder keeps when it is one JSON value, and
+// as it was otherwise.
 type Record struct {
 	Direction Direction       `json:"direction"`
 	Frame     json.RawMessage `json:"frame"`

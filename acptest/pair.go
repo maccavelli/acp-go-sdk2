@@ -14,6 +14,11 @@ import (
 )
 
 // Pair is an agent-side and a client-side connection joined to each other.
+//
+// Agent is the agent's end: it serves the acp.Agent that Connect was given
+// and sends the client the agent's notifications and requests. Client is the
+// client's end: it serves the acp.Client that Connect was given and sends the
+// agent the client's requests, such as Initialize and Prompt.
 type Pair struct {
 	Agent  *acp.AgentSideConnection
 	Client *acp.ClientSideConnection

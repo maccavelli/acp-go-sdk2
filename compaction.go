@@ -7,6 +7,19 @@ import "sync"
 // its metadata. Seen is true once a compaction_update for the id has arrived;
 // an entity known only from summary chunks has it false
 // (0039-MADR-five-adopter-additions-on-schema-1-25-0.md, item 3).
+//
+// The fields hold what CompactionTimeline.Apply has kept:
+//   - Id is the agent's id for the compaction, unique within the session. It
+//     never changes.
+//   - Status is the last status a compaction_update carried. An entity that no
+//     update has reached is in_progress.
+//   - Summary is the summary's content blocks, in the order they arrived: a
+//     compaction_update's summary replaces them and each summary chunk
+//     appends one. It is nil when there is none or an update cleared it.
+//   - Error is the last error text a compaction_update gave, and "" when
+//     there is none or an update cleared it.
+//   - Meta is the _meta object of the last compaction_update that set one, and
+//     nil when there is none or an update cleared it.
 type CompactionEntity struct {
 	Id      CompactionId //nolint:revive // var-naming: spelled as the generated types spell it, CompactionUpdate.CompactionId among them.
 	Status  CompactionStatus

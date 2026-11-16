@@ -9,6 +9,24 @@ import (
 // ToolCallEntity is a tool call as a client has received it: the fields of
 // its tool_call, as each tool_call_update has changed them
 // (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 9).
+//
+// The fields are those of ToolCall, as ToolCallTimeline.Apply has kept them:
+//   - Id is the call's id, unique within the session. It never changes.
+//   - Title is the human-readable title of what the tool is doing.
+//   - Kind is the category of the tool, which clients use to choose an icon.
+//     It is empty when no update has named a kind this package knows.
+//   - Status is the call's execution status, as the last tool_call or
+//     tool_call_update gave it. A call first seen from a tool_call_update
+//     starts pending; one whose tool_call gave no status this package knows
+//     has it empty.
+//   - Name is the tool's programmatic name, and nil when none has been given.
+//   - Content is the content the tool call produced, nil when there is none.
+//   - Locations are the file locations the call affects, nil when there are
+//     none.
+//   - RawInput is the raw input parameters sent to the tool, as JSON, and nil
+//     when none has been given.
+//   - RawOutput is the raw output the tool returned, as JSON, and nil when
+//     none has been given.
 type ToolCallEntity struct {
 	Id        ToolCallId //nolint:revive // var-naming: spelled as CompactionEntity.Id is.
 	Title     string

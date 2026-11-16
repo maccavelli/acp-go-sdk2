@@ -39,10 +39,20 @@ type MemoryClient struct {
 // *clienthost.Terminals does. It is an interface here so that this package
 // does not import clienthost, whose tests use this package.
 type TerminalHost interface {
+	// CreateTerminal answers the client's terminal/create request: it starts
+	// the command and returns the new terminal's id.
 	CreateTerminal(ctx context.Context, params acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error)
+	// TerminalOutput answers terminal/output with the output the terminal has
+	// produced so far, and its exit status once it has exited.
 	TerminalOutput(ctx context.Context, params acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error)
+	// WaitForTerminalExit answers terminal/wait_for_exit once the terminal's
+	// command has exited, with its exit code or signal.
 	WaitForTerminalExit(ctx context.Context, params acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error)
+	// KillTerminal answers terminal/kill: it ends the terminal's command and
+	// keeps the terminal, so that its output can still be read.
 	KillTerminal(ctx context.Context, params acp.KillTerminalRequest) (acp.KillTerminalResponse, error)
+	// ReleaseTerminal answers terminal/release: it ends the command if it
+	// still runs and frees the terminal, whose id is then invalid.
 	ReleaseTerminal(ctx context.Context, params acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error)
 }
 

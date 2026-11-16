@@ -40,6 +40,11 @@ const (
 // ElicitationField is one property of an elicitation form, as a client shows
 // it: its name, whether the form requires it, and its schema
 // (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 1).
+//
+// Name is the property's key in the form's schema; the answer's content is
+// keyed by it. Required is true when the schema's required list names it.
+// Schema is the property's own schema, which says how to show it and what
+// answers it takes.
 type ElicitationField struct {
 	Name     string
 	Required bool
@@ -383,6 +388,10 @@ func checkElicitationAnswer(params, result any) error {
 // to show, whether the scheme is https, and whether a label of the host is
 // Punycode, an internationalized name the user may misread
 // (0040-MADR-check-elicitation-forms-answers-and-urls.md, item 5).
+//
+// Host is the URL's host name, lowercased, without its port or brackets: the
+// name to show beside the whole URL. Secure is true when the scheme is https.
+// A zero ElicitationURL has an empty Host and is not Secure.
 type ElicitationURL struct {
 	URL      *url.URL
 	Host     string

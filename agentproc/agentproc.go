@@ -38,6 +38,10 @@ var ErrTerminated = errors.New("agentproc: agent terminated")
 var ErrKilled = errors.New("agentproc: agent killed")
 
 // Command is an agent to start as a child process.
+//
+// StderrTailLines is the cap on the lines of the agent's standard error that
+// the tail keeps, as StderrTail is on its bytes. Either one above zero turns
+// the tail on, and a cap of zero is no cap on that measure.
 type Command struct {
 	// Cmd is the agent's command. It must not have been started, and its
 	// Stdin and Stdout must be nil: Start connects them to pipes it owns.

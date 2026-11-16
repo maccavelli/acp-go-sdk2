@@ -15,6 +15,13 @@ import (
 // context.DeadlineExceeded of a context that ended, ErrPeerDisconnected, or
 // the error that failed a write. An error a peer answered has none
 // (0019-MADR-remediate-debugging-pass-findings.md, decision 3).
+//
+// Code, Message and Data are the three members of the JSON-RPC error object:
+//   - Code is the error's code, a JSON-RPC one such as -32601 for a method not
+//     found, or an ACP one. The NewParseError family sets the standard ones.
+//   - Message is the error's short text.
+//   - Data is the error's detail, any value that encodes as JSON, or nil for
+//     none, in which case the "data" key is not written.
 type RequestError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -293,6 +300,10 @@ func (e *CapabilityError) Error() string {
 // to the version requested. The application closes the connection and
 // informs the user, as the specification recommends
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, N1).
+//
+// Requested is the protocol version the initialize request carried: the one
+// an application asked to send, or, in an agent's check of its own answer, the
+// one the client's request named.
 type ProtocolVersionError struct {
 	Requested int
 	Answered  int

@@ -68,6 +68,8 @@ func (k ObservationKind) String() string {
 // reports it. Its fields are plain values: ID is the observer's own copy
 // (0046-MADR-sending-and-receiving-middleware.md, D9).
 type Observation struct {
+	// Kind is what the observation reports. Every observation the connection
+	// makes has one; the zero value is not a kind.
 	Kind ObservationKind
 	// Method is the message's method, when it names one and was decoded.
 	Method string

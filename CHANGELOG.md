@@ -22,6 +22,12 @@
   `consumer_probe.py --tree` and `remote.py --host`.
 - Made this file docs-safe: a change to `CHANGELOG.md` alone now runs the Docs workflow and not CI's Go suite, and
   `make check-records` checks its links with the other unnumbered docs.
+- Documented the exported fields and interface methods of the hand-written public code that had no doc comment:
+  `CompactionEntity`, `ToolCallEntity`, `RequestError`, `ProtocolVersionError`, `ElicitationField`, `ElicitationURL`,
+  `Observation`, `acptest`'s `TerminalHost`, `Pair`, `Record` and `Turn`, and `agentproc`'s `Command` and `InProcess`.
+  The package comment's list of the connection's error sentinels now names `ErrShutdown`, `ErrHandlersRunning`,
+  `ErrSendingMiddleware` and `ErrNotificationQueueOverflow`. Comments only: no code and no API changes. The generated
+  types are the next phase's.
 
 ## v1.36.0 — 2026-11-11
 

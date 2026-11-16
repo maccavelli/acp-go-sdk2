@@ -13,6 +13,8 @@ import (
 // (0041-MADR-close-the-gaps-the-consumers-wait-on.md, item 8, for Err, Usage
 // and WaitCancel).
 type Turn struct {
+	// Updates are the session updates the agent sends on the prompt's
+	// session, in order, before it answers. Nil sends none.
 	Updates []acp.SessionUpdate
 	// StopReason is the turn's answer; left empty, it is acp.StopReasonEndTurn,
 	// since the SDK refuses to send a stop reason the schema does not list

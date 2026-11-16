@@ -39,6 +39,9 @@ var ErrAbandoned = errors.New("agentproc: in-process agent abandoned")
 // goroutine does. A client that needs to survive its agent's faults runs the
 // agent as a child, through Command. An in-process agent has no process
 // group, job, death signal or standard error; it ends with this process.
+//
+// InputTap, when set, receives a copy of what the connection writes to the
+// agent's input, as Command.InputTap does of a child's standard input.
 type InProcess struct {
 	// Serve runs the agent over in and out until in ends, as a program's main
 	// serves os.Stdin and os.Stdout, and returns why it stopped. ctx is the
