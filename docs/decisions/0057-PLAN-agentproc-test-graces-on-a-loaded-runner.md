@@ -26,6 +26,14 @@ decision "Longer exit grace for the tests that need it", and the answers to ques
 execution record's entry of that date). No question is open. The owner approved it for execution the same day, phases 1 to 4 in
 order and then phase 5 (the execution record's approval entry).
 
+*Added 2026-11-16, after phase 1's audit, for the owner's two rulings on it (the MADR's amendment of that date, W1 to W5).* The
+goal also covers: the four tests the audit left undecided, `TestWaitErrorSaysTheCauseOnce/Kill,_Serve_returning_its_cause`,
+`TestCloseContextBoundsHandlers/in_process,_KillContext`, `TestCloseContextCause` and `TestCloseContextNotHandlers`, moved to
+`exitGrace`, each first seen to fail at `HEAD`; and four bounds that are not a grace, in `TestNoLostOutput`, `TestTapErrorIgnored`,
+`TestOutputTapVerbatim` and `TestCloseReadsTheAgentsLastOutput`, rescaled, each from its own measurement, by a new phase 1b. A
+test that cannot be made to fail at `HEAD` does not move and is reported; a bound that cannot be given a figure that follows from
+its measurement and keeps its test able to fail on its defect stops the PLAN for the owner.
+
 ## Scope
 
 **Preconditions.** The MADR is `accepted` with its questions answered (2026-11-16), and this PLAN amended to the answers (the same
@@ -59,6 +67,19 @@ host's runs under `-race` stay in the PLAN as evidence for the tests this PLAN m
 judged on those tests, and the MADR's F7 tests (`TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix`, and, under the
 in-process load, `TestBlockedTapDetached` and `TestTapErrorIgnored`) are reported beside them with their own counts, run, not skipped,
 and not counted as passes or as this PLAN's failures. A failure of any other test there is a finding, and stops the phase.
+*Added 2026-11-16, after phase 1's audit:* the tests the Linux rounds are judged on include, once moved, the four of the MADR's W1
+and the four of W2. `TestTapErrorIgnored` leaves the list counted apart: its fixed 3 s wait is W2's. `TestBlockedTapDetached` stays
+on it for its failure to be ready within 30 s (`tap_test.go:294`), with the two 56 MiB tests; any other failure of it counts as a
+moved test's, since its `Close` moves with class A.
+
+**Scope, widened** (added 2026-11-16, after phase 1's audit, by the owner's rulings "Move all four, each proved first" and "Widen
+0057 to these bounds now", each relayed by the coordinator; the MADR's amendment of that date). In scope as well: the four tests of
+the MADR's W1, and the four bounds of its W2, in `agentproc_test.go` and `tap_test.go`, measured in phase 1b before phase 2 changes
+them. Out of scope still: the two 56 MiB tests and `TestBlockedTapDetached`'s readiness (phase 5's report); `closecontext_test.go:156`
+until question 5 is answered.
+
+**Order and review, amended** (added 2026-11-16): phases 1, 1b, 2, 3 and 4 run in that order, each reviewed, committed and
+CI-checked by the coordinator before the next; phase 5 after CI is green on the fix, as before.
 
 **The rule each test is classified by** (the constant's comment carries it):
 
@@ -68,6 +89,18 @@ and not counted as passes or as this PLAN's failures. A failure of any other tes
 | B | waits a grace out, then needs the exit seen within the next step: `TestCloseLadder/exits_on_SIGTERM` | `exitGrace`; its bounds in graces scale with it |
 | C | waits graces out and asserts only a floor, a kill, or `ErrTerminated` or `ErrKilled` either way | `testGrace` |
 | D | no grace in its outcome | unchanged |
+
+*Added 2026-11-16, after phase 1's audit.* By the owner's ruling "Move all four, each proved first", relayed by the coordinator,
+class A reads: the exit, the drain or the return seen within the first grace-bound wait. By the coordinator's applications of
+standing rules, recorded as such and not as the owner's rulings:
+
+* a test already under `slack` or more keeps its grace: the rule never lowers one (the audit's finding 7);
+* a bound stated in graces scales with its test's grace: `closecontext_test.go:145`, `:180` and `:246`; `:214` belongs to
+  `TestCloseContextHurriesTheSteps`, class C, which does not move, and stays (finding 5);
+* each moved test is seen to fail at `HEAD` under a plant that fits the wait it depends on, and a test no plant can fail does not
+  move and is reported (finding 4: the twelve class A tests whose outcome has `WaitDelay` and no first step need a plant that
+  outlives `WaitDelay`);
+* the in-process load runs for the whole of each test binary's run, so every moved test runs under it (finding 6).
 
 ## Implementation Steps
 
@@ -89,6 +122,38 @@ Read-only in the tree; experiments in scratch copies (`git archive HEAD`).
 finding. **Acceptance:** the table and the runs recorded; the owner told the count of class A and B tests before phase 2.
 *Annotated 2026-11-16, by the approval:* the count goes to the coordinator, who reviews phase 1 before phase 2 starts; the owner is
 asked only on a deviation ("Order and review").
+*Annotated 2026-11-16, after the audit:* the counts went to the coordinator, who put the audit's open points to the owner; the
+owner's two rulings are in the execution record's entry "2026-11-16: the owner's rulings on the audit".
+
+### Phase 1b: the bounds that are not a grace, measured (mid tier, high effort)
+
+*Added 2026-11-16, after phase 1's audit, by the owner's ruling "Widen 0057 to these bounds now", relayed by the coordinator.* A
+phase of its own, not steps of phase 2: its output is measurements and figures, recorded in this PLAN and committed alone, so the
+coordinator reviews each figure, and the owner hears of any bound that stops (the MADR's W4), before a test changes; phase 2's commit
+then holds test changes whose figures are already reviewed. Read-only in the tree; experiments in scratch copies (`git archive
+HEAD`); every run on the Linux host through the fleet's `run-on-host --need linux --race`, in chunks of a few minutes.
+
+1. **The parts, stamped.** For each bound of the MADR's W2, a scratch copy stamps the bound's start and each part it waits for:
+   * `TestNoLostOutput` and `TestTapErrorIgnored`: the go notification sent; the burst agent's write done and its exit (the child's
+     stamps); the client's 1000th update handled; `Cmd.Wait`'s return; `Wait`'s return.
+   * `TestOutputTapVerbatim`: the drain's start in `drainTaps`; each tap `Write`'s start and end, with its size; the drain's end.
+   * `TestCloseReadsTheAgentsLastOutput`: the go notification sent; each held read, with its size; the agent's exit (the child's
+     stamp); `done`; `Close`'s return.
+   * Under question 5's answer (a) or (b), `closecontext_test.go:156` the same way: the release, the exit, `Wait`'s return.
+2. **Two loads**, each test 20 runs under each, `-race`: beside the whole module's `go test -race -shuffle=on ./...`, as CI's step
+   runs; and the in-process load (32 busy goroutines, `GOMAXPROCS=2`) started from the scratch test binary's own start, by an
+   `init` in a scratch-only file when `BURN` is set, so that it lasts the whole run and no test runs outside it.
+3. **The figure:** per bound, a multiple of the worst measured over both loads, about five times as the first decision's figure is,
+   rounded up to a whole second or to `slack`'s multiple, and written with its arithmetic.
+4. **The margin:** a scratch plant delaying the waited thing so that it ends just inside the new bound (at 0.8 of it) must pass, and
+   just outside (at 1.2 of it) must fail.
+5. **The defect kept:** the MADR's W2 break for each test, planted in a scratch copy with the new figure, must fail the test.
+6. **The stop (W4):** a bound for which steps 3 to 5 cannot all hold goes to the coordinator for the owner, with its measurement, and
+   phase 2 waits for the owner's word on it.
+7. Record, per bound: the parts, their median, p90 and worst per load, the figure, the margin's two results and the break's.
+
+**Verification:** each stamp seen in the runs; for each bound, the margin's two results and the break's failure recorded, with the
+message. **Acceptance:** a figure for each of W2's four bounds, or its stop sent to the owner; the coordinator's review before phase 2.
 
 ### Phase 2: the tests (mid tier, medium effort)
 
@@ -114,6 +179,23 @@ asked only on a deviation ("Order and review").
 
 **Acceptance:** each check above passes, its output recorded; `git diff --stat` touches only `agentproc/*_test.go`.
 
+*Added 2026-11-16, after phase 1's audit (the owner's rulings and the coordinator's applications, in the rule's addition above):*
+
+* **What moves.** The class A and B tests phase 1's table marks "yes"; the four tests of the MADR's W1, to `exitGrace`; the four
+  bounds of W2, to phase 1b's figures: `TestNoLostOutput`'s and `TestTapErrorIgnored`'s `within` bounds, `tappedFrames`' grace (which
+  `TestInputTapSeesWrites` shares, a raise the rule allows) and `TestCloseReadsTheAgentsLastOutput`'s grace and its `within` bound.
+  Tests already under `slack` or more keep their grace, but where phase 1b's figure raises it.
+* **Bounds in graces:** `closecontext_test.go:145`, `:180` and `:246` scale with their tests' grace; `:214` stays.
+* **A plant that fits each moved test**, seen to fail at `HEAD` and pass amended, the client-side plant above serving only the tests
+  whose outcome waits the first step: for the twelve whose outcome has `WaitDelay` and no first step, a standard-error copy that
+  outlives `WaitDelay`; for W1's four, a late `Serve` return or a late handler, as fits each one's wait; for W2's four, phase 1b's
+  margin plants. A test no plant can fail at `HEAD` does not move, and is reported.
+* **The load covers every moved test:** the A/B runs under the in-process load started from the test binary's start (phase 1b,
+  step 2), not as a parallel test of a fixed length. Its "0 of 10 amended" applies to every test this phase moves, W1's four and
+  W2's four included.
+* **The breaks:** "the first step waits 0 s" fails each class A test whose outcome waits the first step; W2's break fails each of its
+  four tests; each amended.
+
 ### Phase 3: the docs (cheapest tier, medium effort)
 
 1. `docs/architecture.md`, "Checks that guard it" for `agentproc`: the sentence that names the tests "under a grace of `slack`"
@@ -130,6 +212,9 @@ asked only on a deviation ("Order and review").
 
 **Verification:** `make check-records`, `make markdownlint`, `make disclosure-check`, each exit 0; `make pre-add-check` with the
 changed files when `agentproc.go` changed. **Acceptance:** no doc found false by step 5.
+
+*Added 2026-11-16, after phase 1's audit:* the docs and the `CHANGELOG.md` line also name the rescaled bounds of the MADR's W2, with
+the figures phase 1b gave them, beside the grace.
 
 ### Phase 4: confirmation and CI (mid tier, medium effort)
 
@@ -150,6 +235,8 @@ changed files when `agentproc.go` changed. **Acceptance:** no doc found false by
 **Acceptance:** on the Linux host, every test this PLAN moved passes in each of the 20 package rounds and the three module rounds,
 and no test fails there but the F7 tests, whose failures are counted and recorded; the module's race gate passes three of three
 on this Mac; the gates pass; CI's six jobs "completed success".
+*Added 2026-11-16, after phase 1's audit:* the tests this PLAN moved include W1's four and W2's four; the tests counted apart are the
+two 56 MiB tests and `TestBlockedTapDetached`'s readiness failure ("Where the race gates run", its addition).
 
 ### Phase 5: the 56 MiB tests' 30 s, by question 3's answer (mid tier, high effort)
 
@@ -159,6 +246,11 @@ in parallel with phases 1 to 4. As first written, nothing here fixed its place; 
 1. Measure `TestDetachedTapIsPrefix` and `TestInProcessDetachedTapIsPrefix` on the Linux host: the time to the 56 MiB under `-race`,
    alone and beside the module, and what it is spent on.
 2. Write `docs/reports/0057-REPORT-<slug>.md`: what was measured, decided nothing; a row in `docs/README.md`.
+
+*Added 2026-11-16, after phase 1's audit:* the report also measures `TestBlockedTapDetached`'s time to be ready (its failures were
+all "the bulk agent did not say it was ready within 30s", `tap_test.go:294`) and `TestDetachedTapIsPrefix`'s failure at its 5 s grace
+in the audit's round 1 (`tap_test.go:349`). `TestTapErrorIgnored` is no longer the report's: its fixed wait is phase 1b's. Under
+question 5's answer (c), `closecontext_test.go:156` is the report's too.
 
 **Acceptance:** the REPORT committed and put to the owner, who then decides what follows, as the answer "A measured report, then
 decide" says; any defect it finds left for a record of its own. Until that decision, the race gates run as "Where the race gates
@@ -170,6 +262,17 @@ The phases' checks, together: the plants and breaks fail and pass as required; t
 judged on the moved tests with the F7 tests counted apart; the module's race gate on this Mac; `tools/gates.py --all`; CI's six
 jobs. Each new check is seen to fail on a deliberately broken input in a scratch copy before it is
 relied on, and the record says how it failed.
+
+*Added 2026-11-16, after phase 1's audit:*
+
+| Tests | Seen to fail at `HEAD` by | Passes amended | Its defect still caught by | Load proof | Phase |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| class A, outcome waits the first step | the client-side plant, 350 ms | yes | "the first step waits 0 s" | A/B, 0 of 10 amended | 2 |
+| class A, `WaitDelay` only (the twelve) | a standard-error copy that outlives `WaitDelay` | yes | the same plant at the new `WaitDelay`, past it | A/B, 0 of 10 amended | 2 |
+| class B | the client-side plant in the second step | yes | its floor and its bound in graces | A/B, 0 of 10 amended | 2 |
+| W1's four | a late `Serve` return or handler, as fits | yes | its own assertion's plant, past `exitGrace` | A/B, 0 of 10 amended | 2 |
+| W2's four | phase 1b's margin plant, past the bound | yes, at 0.8 of the bound | W2's break | measured in 1b; A/B, 0 of 10 amended | 1b, 2 |
+| all moved tests | - | - | - | 20 rounds on the Linux host, F7's counted apart; the module race gate on this Mac | 4 |
 
 ## Rollout and Rollback
 
@@ -201,6 +304,17 @@ the chosen decision. The options are kept as they were put.
    * (a) Recommended: say what the code does, in the comment and the README, phase 3 step 4.
    * (b) Leave it.
    * (c) The MADR's O1, a product change, in a record of its own.
+
+### Question after phase 1's audit, open (added 2026-11-16)
+
+5. **`closecontext_test.go:156`, a fixed 3 s `Wait` (the MADR's G7).** It failed once, in the audit's round 3, beside its subtest's
+   grace failure, which the bound scaling moves; whether it fails by itself is not known.
+   * (a) Recommended: measure it in phase 1b with W2's four, and rescale it only if it fails once its subtest's grace and bound have
+     moved. Cost: one more measurement in phase 1b.
+   * (b) Rescale it now as a fifth bound of W2. Cost: a figure for a bound that may not need one.
+   * (c) Leave it to phase 5's report. Cost: a bound the load exposed left outside the plan the owner's ruling made for them.
+
+   Phase 1b's step for it runs only on answer (a) or (b); the rest of phase 1b does not depend on it.
 
 ## Execution record
 
@@ -633,3 +747,41 @@ output.
 After the last edit, with the PLAN and `docs/README.md` staged: `python3 -B scripts/check_records.py --check-all`,
 `python3 -B scripts/check_disclosure.py` and `markdownlint-cli2` v0.23.2, each exit 0, as the coordinator's brief for this phase asks. Staged, not
 committed, not pushed.
+
+### 2026-11-16: the owner's rulings on the audit
+
+Phase 1 was committed as `f0b7c2e`. The coordinator put the audit's open points to the owner, who ruled the same day; the
+coordinator relayed each label, the option's text as put, and the options not chosen. This entry amends the pair; no phase ran, and
+no source or test changed. Drafted by a strongest-tier model at high effort on the coordinator's brief.
+
+* **"Move all four, each proved first"**, the owner's ruling, relayed by the coordinator, on the four tests the rule left undecided:
+  the three "unclear" at `testGrace` and `TestCloseContextNotHandlers`, class A at 2 s. Not chosen: leave all four; move only the
+  three at 300 ms.
+* **"Widen 0057 to these bounds now"**, the owner's ruling, relayed by the coordinator, on the bounds that are not a grace in
+  `TestNoLostOutput`, `TestTapErrorIgnored`, `TestOutputTapVerbatim` and `TestCloseReadsTheAgentsLastOutput`; not the option the
+  coordinator recommended. Not chosen: keep 0057 to graces and let phase 5's report measure the rest; stop using the starved load
+  as proof.
+* **Unchanged:** "A measured report, then decide". `TestTapErrorIgnored` is now W2's; `TestBlockedTapDetached`'s readiness stays
+  with the report, its `Close` moving with class A.
+* **The coordinator's applications of standing rules,** recorded as such, not as the owner's rulings: each moved test seen to fail
+  at `HEAD` under a plant that fits it (finding 4); the rule never lowers a grace (finding 7); bounds in graces scale, at
+  `closecontext_test.go:145`, `:180` and `:246`, and `:214` stays (finding 5); the load covers every moved test for the whole run
+  (finding 6).
+* **The phase structure, as it now stands:** 1, the audit (mid tier, high effort), done; 1b, the bounds that are not a grace,
+  measured (mid tier, high effort), new; 2, the tests (mid tier, medium effort); 3, the docs (cheapest tier, medium effort); 4,
+  confirmation and CI (mid tier, medium effort); then 5, the report (mid tier, high effort). Phase 1b is its own phase so that each
+  figure, and any stop under the MADR's W4, is reviewed and committed before a test changes.
+* **New question:** 5, `closecontext_test.go:156`, open; it holds only phase 1b's step for that bound.
+* **Status.** The MADR stays `accepted`, amended; this PLAN stays `in-progress`, its execution approved, phase 1 done. Phase 1b
+  carries out "Widen 0057 to these bounds now", whose text, as put, named a measurement for each bound, and this PLAN places it
+  inside the approved run, before phase 2. That placement is this amendment's reading, for the coordinator to confirm before
+  phase 1b is briefed; it is not a ruling of the owner's.
+* **Touched:**
+  * the MADR: F7's paragraph (an addition after it); Decision Drivers (an addition); Decision Outcome (an addition); Consequences
+    (three additions); Confirmation (an addition); a new section, "Amendment 2026-11-16, after phase 1's audit: four borderline
+    tests, and the bounds that are not a grace", with G1 to G7, the rulings, the coordinator's applications, W1 to W5 and question 5;
+  * this PLAN: Goal (an addition); Scope, "Where the race gates run" (an addition), "Scope, widened" and "Order and review,
+    amended" (new); the rule's table (an addition); phase 1's acceptance (an annotation); phase 1b (new); phase 2 (an addition);
+    phase 3 (an addition); phase 4's acceptance (an addition); phase 5 (an addition); Verification (a table added); "Question after
+    phase 1's audit, open" (new); this entry;
+  * `docs/README.md`: the MADR's and this PLAN's rows.

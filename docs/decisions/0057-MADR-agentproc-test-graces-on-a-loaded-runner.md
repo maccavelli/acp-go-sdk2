@@ -173,6 +173,9 @@ go1.27.4 darwin/arm64; "the Linux host" is the fleet's Linux test host, 4 CPUs, 
   (`tap_test.go:256`). Each moves megabytes through the connection under `-race` before its bound, a throughput, not a grace;
   none has failed in CI's window, where the race step passed on the 14 Linux jobs of the seven runs before this one. Its cause was not
   investigated here; it is question 3, answered: a measured report, the PLAN's phase 5. It also means the Linux host cannot, today, pass the module's race run of `agentproc`.
+  *Amended 2026-11-16, after phase 1's audit (the amendment of that date, below):* `TestTapErrorIgnored`'s fixed 3 s wait is now
+  within this record's decision, by the owner's ruling on the bounds that are not a grace; `TestBlockedTapDetached`'s failure to be
+  ready within 30 s stays with phase 5's report, beside the two 56 MiB tests.
 
 ### Reproduced, and not
 
@@ -221,6 +224,10 @@ measured closes beside the whole module under `-race` (F3); and in 7 of 10 round
 * A figure for a bound must follow from what the time is spent on, not be raised until a run passes.
 * The suite should not grow slower in passing runs.
 * The kind has recurred four times; a fix one test at a time leaves the rest of the class (F6) to fail later.
+* *Added 2026-11-16, after phase 1's audit:* the driver on a bound's figure, that it must follow from what the time is spent on and
+  not be raised until a run passes, now binds the bounds that are not a grace too (the amendment of that date, below). A bound that
+  cannot be given such a figure, keeping its test able to fail on the defect it is for, goes to the owner; it does not get a larger
+  number.
 
 ## Considered Options
 
@@ -249,6 +256,12 @@ deliberately starved process 639 ms (F3); `slack`, 3 s, is about five times the 
 2.5 s late passes, 3.5 s late fails (F5). 0049's probe found 1.2 s enough in 100 runs under its load, which is less margin than
 the suite's own bound and was not chosen there either.
 
+*Added 2026-11-16, after phase 1's audit.* The decision above, decided first, stands. The owner then widened it, by two rulings,
+each relayed by the coordinator (the amendment of that date, below): the rule reads "the exit, the drain or the return seen within
+the first grace-bound wait", which moves four tests the audit left undecided, each proved first; and the decision also covers the
+fixed waits and drain bounds that are not a grace and that the starved load exposed in four tests, each rescaled from its own
+measurement. The two 56 MiB tests stay with phase 5's report.
+
 ### Consequences
 
 * Good, because the cause is removed for the class, not for one test (F6), which a fifth one-test fix would leave behind.
@@ -261,6 +274,12 @@ the suite's own bound and was not chosen there either.
   what keeps that choice reviewable.
 * Bad, because a product defect that makes `Close` slow by less than 3 s, but more than 300 ms, would no longer fail these tests;
   the ladder tests that keep `testGrace`, and `TestCloseLadder`'s own bounds on the steps, still measure the steps.
+* *Added 2026-11-16, after phase 1's audit:* Bad, because the record grows past the CI failure it was opened for, and its fix waits
+  for the measurement of four more bounds (the owner's ruling, as put to the owner, said so).
+* *Added 2026-11-16:* Good, because one PLAN covers every bound the starved load exposed in `agentproc`'s tests, the two 56 MiB tests
+  and `TestBlockedTapDetached`'s readiness aside, which phase 5's report measures.
+* *Added 2026-11-16:* Bad, because a bound that is not a grace may not admit a figure that both follows from measurement and keeps
+  its test able to fail on its defect; such a bound stops the PLAN for the owner.
 
 ### Confirmation
 
@@ -271,6 +290,14 @@ the suite's own bound and was not chosen there either.
 * **Repeats:** the amended package, 20 rounds under `-race -shuffle=on` on the Linux host, and the whole module beside it as CI's
   step runs it, through `run-on-host`.
 * **CI:** the six jobs green on the commit that carries the fix.
+* *Added 2026-11-16, after phase 1's audit:*
+  * **Each moved test seen to fail first:** at `HEAD`, under a plant that fits the wait it depends on (a late exit for the first
+    step; a standard-error copy that outlives `WaitDelay` for a test whose agent exits of itself; a late `Serve` return or drain for
+    the borderline four), and passing amended. A test that no plant can fail at `HEAD` does not move and is reported.
+  * **Each rescaled bound:** its figure a multiple of the worst measured under both loads, with the planted margin shown, just inside
+    passing and just outside failing; and the planted product break for its defect still failing it after the move.
+  * **The load:** the A/B under a load that covers every moved test for its whole run, 0 of 10 amended, for every test the PLAN
+    moves, the borderline four and the four rescaled bounds included.
 
 ## Pros and Cons of the Options
 
@@ -358,3 +385,98 @@ Each had three options; the first was recommended. They are repeated, with their
    its own.
    * **Answered (a),** the owner's ruling, relayed by the coordinator: "Say what the code does". Not chosen: leave the comment;
      change the behaviour in a separate record.
+
+## Amendment 2026-11-16, after phase 1's audit: four borderline tests, and the bounds that are not a grace
+
+Found by the PLAN's phase 1, its entry "2026-11-16: phase 1 (the audit)" in
+[0057-PLAN-agentproc-test-graces-on-a-loaded-runner.md](0057-PLAN-agentproc-test-graces-on-a-loaded-runner.md), committed as
+`f0b7c2e`, and ruled on by the owner the same day. The decision above, as first decided, stands; this amendment adds to it. Line
+numbers are those of `f0b7c2e`, whose tests are those of `32a74d7`.
+
+### What the audit found
+
+Facts from that entry, its five rounds of the whole package under the in-process load on the Linux host:
+
+* **G1. Four tests the rule left undecided.** Three run under `testGrace` and the audit classed them "unclear":
+  `TestWaitErrorSaysTheCauseOnce/Kill,_Serve_returning_its_cause` (`inprocess_test.go:227`, Kill's abandonment wait),
+  `TestCloseContextBoundsHandlers/in_process,_KillContext` (`closecontext_test.go:142`, its assertion `:149`) and
+  `TestCloseContextCause` (`closecontext_test.go:242`, its assertion `:249`), the last two through a context bound of `testGrace`
+  that decides whether `acp.ErrHandlersRunning` is joined (`agentproc.go:644`). The fourth, `TestCloseContextNotHandlers`
+  (`closecontext_test.go:259`), is class A at a grace of 2 s, below `slack`.
+* **G2. Four tests failed on bounds that a longer exit grace does not move.** `TestNoLostOutput`, "Wait took longer than 3s"
+  (`agentproc_test.go:174`, round 5), and `TestTapErrorIgnored`, the same (`tap_test.go:256`, round 5): each a fixed
+  `within(t, slack, "Wait")`. `TestOutputTapVerbatim` (`tap_test.go:219`, `:222`, round 1): the tap held 2031616 of the agent's
+  2097208 bytes when the drain's 3 s grace ended. `TestCloseReadsTheAgentsLastOutput` (`tap_test.go:398`, round 2): "agent
+  terminated: signal: terminated" at a 5 s grace.
+* **G3.** Twelve class A tests have no first-step wait in their outcome, only `WaitDelay` (the audit's finding 4), so a late exit
+  cannot fail them.
+* **G4.** Bounds stated in graces: `closecontext_test.go:145` (`const bound = testGrace`), `:180` and `:246` (context timeouts of
+  `testGrace`), and `:214` (`const grace, bound = 5 * time.Second, testGrace`) (finding 5).
+* **G5.** The load, a parallel test of 60 s, covered part of each round, so "not seen to fail" is weak (finding 6).
+* **G6.** Nine class A and B tests, and four unclear ones, already run under `slack` or more (finding 7).
+* **G7.** `TestCloseContextBoundsHandlers/a_child,_CloseContext` failed in round 3 on its grace and also "Wait took longer than 3s"
+  (`closecontext_test.go:156`), a fixed `within(t, slack, "Wait")` not among G2's four.
+
+### The owner's rulings
+
+* **The four borderline tests (G1):** "Move all four, each proved first", the owner's ruling, relayed by the coordinator. As put to
+  the owner: the rule is read as "the exit, the drain or the return seen within the first grace-bound wait", and the four move to
+  3 s; each must first be seen to fail at today's code under a planted delay; one that cannot be made to fail does not move and is
+  reported. Options not chosen: leave all four; move only the three at 300 ms.
+* **The bounds that are not a grace (G2):** "Widen 0057 to these bounds now", the owner's ruling, relayed by the coordinator; not the
+  option the coordinator recommended. As put to the owner: 0057 also rescales the fixed 3 s waits and the drain bounds, each from its
+  own measurement; one plan covers every bound the load exposed; it grows past the CI failure it was opened for and delays that fix.
+  Options not chosen: keep 0057 to graces and let phase 5's report measure the rest; stop using the starved load as proof.
+* **Unchanged:** "A measured report, then decide", on F7. Of the tests F7 named "under the in-process load", `TestTapErrorIgnored` is
+  one of G2's four and now within this decision. `TestBlockedTapDetached` stays with phase 5's report: each of its failures, in the
+  root-cause chunk AU and in the audit's rounds 1 and 2, was "the bulk agent did not say it was ready within 30s" (`tap_test.go:294`),
+  the bulk agent's megabytes before it is ready, the mechanism of `TestDetachedTapIsPrefix`'s F7 failure; its `Close` under
+  `testGrace` (class A) moves with the rest of the class. The two 56 MiB tests stay with the report, `TestDetachedTapIsPrefix`'s
+  audit failure at its 5 s grace (`tap_test.go:349`, round 1) included.
+
+### The coordinator's applications of standing rules
+
+Recorded as the coordinator's applications, not the owner's rulings:
+
+* **A check is unused until seen to fail (G3).** Each moved test must be seen to fail at `HEAD` under a plant that fits the wait it
+  depends on; for the twelve, one that outlives `WaitDelay`. The audit's claim is from reading, so phase 2 verifies it by running. A
+  test that no plant can fail at `HEAD` does not move and is reported.
+* **The rule never lowers a grace (G6).** A test already under `slack` or more keeps its grace.
+* **Bounds stated in graces scale with the test's grace (G4).** `closecontext_test.go:145`, `:180` and `:246` move with their tests'
+  grace; `:214` belongs to `TestCloseContextHurriesTheSteps`, class C, which does not move, so it stays.
+* **The load must cover every moved test (G5).** Phase 2's load runs for the whole of each test binary's run, not as a test that
+  takes a parallel slot for part of it.
+
+### The decision, as widened
+
+* **W1.** Class A reads "the exit, the drain or the return seen within the first grace-bound wait". The four tests of G1 move to
+  `exitGrace`, each first seen to fail at `HEAD` under a planted delay; one that cannot be made to fail stays and is reported.
+* **W2.** The four bounds of G2 are rescaled, each from its own measurement, and each keeps the defect it is for:
+
+  | Test | The bound | What it waits for | The defect it is for | The planted break that must still fail it |
+  | :--- | :--- | :--- | :--- | :--- |
+  | `TestNoLostOutput` | `within(t, slack, "Wait")`, `agentproc_test.go:174` | the burst agent's 1000 updates read, decoded and handled; its exit; `Wait`'s return | lost output, the count at `:178` (0027's P1, P2) | the connection closed at the agent's exit, before it has read to the end |
+  | `TestTapErrorIgnored` | `within(t, slack, "Wait")`, `tap_test.go:256` | the same, with both taps failing every `Write` | a tap error that stops the connection or holds `Wait`, or loses updates (`:259`) | a tap's `Write` error returned to the connection's reader |
+  | `TestOutputTapVerbatim` | the drain within `tappedFrames`' grace, `slack` (`tap_test.go:195`; the tap's 1 ms, `:194`; the checks `:219`, `:222`) | the output tap's 2 MiB in 64 KiB writes, 1 ms a write plus the wake-ups | a tap that does not receive every byte, in order | a tap that skips one queued write |
+  | `TestCloseReadsTheAgentsLastOutput` | `Close`'s first step at its 5 s grace, `tap_test.go:377`, `:397`-`:398` | the agent's 2 MiB read through a reader held back 5 ms a read, then its exit | a `Close` that loses the agent's last output (0041-PLAN, phases 2 and 3) | `stop` closing the connection at once, which the comment at `agentproc.go:664`-`:668` forbids |
+
+* **W3. A measurement before any figure.** For each bound of W2: what it waits for, split into its parts where they can be stamped;
+  the time each takes beside the whole module under `-race`, and under the in-process load covering the whole run, on the Linux
+  host; the figure that follows, by this record's standard, a multiple of the worst measured, about five times as the first
+  decision's figure is; and the planted margin, a delay putting the waited thing just inside the new bound passing, just outside
+  failing. The audit's finding 3 shows that the multiple the first decision gave a grace does not hold for a tap drain under the
+  starved load (about 100 ms a 64 KiB write, read from the figures, not measured), so no figure is assumed before it is measured.
+* **W4. The stop.** A bound whose figure cannot both follow from its measurement and keep its test able to fail on its defect, under
+  W2's break, goes to the owner with the measurement. It does not get a larger number.
+* **W5. Not in this decision:** the two 56 MiB tests and `TestBlockedTapDetached`'s readiness, which phase 5's report measures; and
+  G7's fixed wait, which question 5 asks about.
+
+### Question, after the audit
+
+5. **G7, `closecontext_test.go:156`.** Its fixed 3 s `Wait` failed once, in the same run as its subtest's grace failure, which W1's
+   bound scaling moves; whether it fails on its own is not known.
+   * (a) Recommended: measure it with W2's four in the PLAN's phase 1b, and rescale it only if it fails once its subtest's grace and
+     bound have moved. Cost: one more measurement. The ruling's text, one plan for every bound the load exposed, reaches it; the
+     evidence does not yet show it exposed by itself.
+   * (b) Rescale it now as a fifth bound of W2. Cost: a figure for a bound that may not need one.
+   * (c) Leave it to phase 5's report. Cost: a bound the load exposed left outside the plan the ruling made for them.
