@@ -480,3 +480,8 @@ Recorded as the coordinator's applications, not the owner's rulings:
      evidence does not yet show it exposed by itself.
    * (b) Rescale it now as a fifth bound of W2. Cost: a figure for a bound that may not need one.
    * (c) Leave it to phase 5's report. Cost: a bound the load exposed left outside the plan the ruling made for them.
+   * **Answered (a), 2026-11-16,** the owner's ruling, relayed by the coordinator: "Measure it; rescale only if it still fails".
+     As put to the owner: phase 1b stamps it with the other four; it is rescaled only if it still fails once its subtest's grace
+     and grace-stated bound have moved; if it stops failing, it stays at 3 s and the record says why. Not chosen: rescale it now
+     with the other four; leave it to the report. W5's exclusion of G7's fixed wait is lifted to that extent: it is measured in
+     phase 1b, and rescaled only on that condition.

@@ -151,6 +151,13 @@ HEAD`); every run on the Linux host through the fleet's `run-on-host --need linu
 6. **The stop (W4):** a bound for which steps 3 to 5 cannot all hold goes to the coordinator for the owner, with its measurement, and
    phase 2 waits for the owner's word on it.
 7. Record, per bound: the parts, their median, p90 and worst per load, the figure, the margin's two results and the break's.
+8. *Added 2026-11-16, for question 5's answer (a), "Measure it; rescale only if it still fails".* The fifth bound,
+   `closecontext_test.go:156`: stamped with the other four (the release, the exit, `Wait`'s return) and measured with them, 20
+   runs of each of its four subtests under each load; then, in a scratch copy in which its subtest's grace and grace-stated bound
+   are moved as phase 2 will move them (`exitGrace`, 3 s, for the grace and for `const bound`, and the `within` bound that states
+   them in graces), measured again under both loads, 20 runs of each subtest. The record says whether the fixed 3 s `Wait` still
+   fails there, with the counts. A figure is proposed, by steps 3 to 5, only if it does; if it does not, it stays at 3 s and the
+   record says why it stopped failing.
 
 **Verification:** each stamp seen in the runs; for each bound, the margin's two results and the break's failure recorded, with the
 message. **Acceptance:** a figure for each of W2's four bounds, or its stop sent to the owner; the coordinator's review before phase 2.
@@ -307,6 +314,8 @@ the chosen decision. The options are kept as they were put.
 
 ### Question after phase 1's audit, open (added 2026-11-16)
 
+*Annotated 2026-11-16: answered (a), below the options.*
+
 5. **`closecontext_test.go:156`, a fixed 3 s `Wait` (the MADR's G7).** It failed once, in the audit's round 3, beside its subtest's
    grace failure, which the bound scaling moves; whether it fails by itself is not known.
    * (a) Recommended: measure it in phase 1b with W2's four, and rescale it only if it fails once its subtest's grace and bound have
@@ -315,6 +324,12 @@ the chosen decision. The options are kept as they were put.
    * (c) Leave it to phase 5's report. Cost: a bound the load exposed left outside the plan the owner's ruling made for them.
 
    Phase 1b's step for it runs only on answer (a) or (b); the rest of phase 1b does not depend on it.
+
+   * **Answered (a), 2026-11-16,** the owner's ruling, relayed by the coordinator: "Measure it; rescale only if it still fails".
+     As put to the owner: phase 1b stamps it with the other four; it is rescaled only if it still fails once its subtest's grace
+     and grace-stated bound have moved; if it stops failing, it stays at 3 s and the record says why. Not chosen: rescale it now
+     with the other four; leave it to the report. Phase 1b's step for it (step 8, added below) therefore runs; "out of scope
+     still", in "Scope, widened", holds only until that step's result. Phase 5's "question 5's answer (c)" is not the answer given.
 
 ## Execution record
 
@@ -785,3 +800,656 @@ no source or test changed. Drafted by a strongest-tier model at high effort on t
     phase 3 (an addition); phase 4's acceptance (an addition); phase 5 (an addition); Verification (a table added); "Question after
     phase 1's audit, open" (new); this entry;
   * `docs/README.md`: the MADR's and this PLAN's rows.
+
+### 2026-11-16: phase 1b (the bounds that are not a grace, measured)
+
+Run by a mainstream-tier model at high effort, as the phase prices it, on the coordinator's brief. `date +%F` printed 2026-11-16,
+the date of the earlier entries. Nothing in the tree changed but this PLAN (this entry, the question 5 answer and annotations),
+the MADR (question 5's answer) and `docs/README.md` (the two rows). No test file, source file, workflow or script changed; every
+instrument below lived in scratch copies made by `git archive HEAD`.
+
+* **Approval and rulings.**
+  * The owner's rulings, relayed by the coordinator, "Run phases 1 to 4 through; then the report" (the approval entry above) and
+    "Widen 0057 to these bounds now" (the entry "2026-11-16: the owner's rulings on the audit"). That entry placed phase 1b inside
+    the approved run and called the placement its own reading, "for the coordinator to confirm". *Confirmed 2026-11-16 by the
+    coordinator, in the brief for this phase, as the coordinator's reading of those two rulings; it is not a ruling of the
+    owner's.*
+  * Question 5, answered (a) by the owner's ruling, relayed by the coordinator: "Measure it; rescale only if it still fails".
+    Recorded under question 5 in the MADR and in this PLAN, and carried into phase 1b as step 8 (added above). Not chosen: rescale
+    it now with the other four; leave it to the report.
+* **Base commit.** `73e7e89`, `main`, clean. Line numbers below are that tree's, except where a message is quoted from a scratch
+  copy, which says so ("the copy's"): the stamped copies add lines to the test files.
+* **Read:** this PLAN and its MADR in full; `agentproc/agentproc_test.go`, `tap_test.go`, `closecontext_test.go`, `child_test.go`,
+  `leak_test.go`, `agentproc/agentproc.go`, `tap.go`, `inprocess.go`; `AGENTS.md`, `tools/README.md`; the skills
+  `madr-and-plan-writing` and `available-dev-hosts`; the audit's scratch load (`TestZZBurn`) and the root-cause work's stamping
+  copy, which shaped the stamps (nothing in them was reused unread).
+* **Ran, this Mac,** without `-race`, in the scratch copies: `gofmt`, `go vet ./agentproc/` on each copy (exit 0); the seven
+  measured tests (the five bounds' tests, `TestInputTapSeesWrites` and the moved copy) once per build of the stamping copy, each
+  run writing its stamps (13 records a run; `ok`); the plant knobs once each on an idle machine (the 1 s plant passed a 2 s bound,
+  the 3 s plant failed it with "Wait took longer than 2s"; the output-tap plant passed at 2 s of a 3 s grace and failed at 4 s;
+  the exit plant the same), so that no knob was first tried on the Linux host.
+* **Ran, the Linux host,** every chunk through `run-on-host --need linux --race --`, one heavy run at a time on the host, never a WSL
+  distro. The chunks are in "The chunks", below; none waited in the host's queue (each printed `waited=0s`), so no other agent's
+  run interleaved with them.
+
+#### The measuring copies
+
+Three copies of the tree at `73e7e89`, each built by a script that asserts every edit's old text occurs once before it replaces
+it: the **stamping copy** (stamps, the in-process load and the moved copy of the fifth bound's test); the **planting copy**
+(that, and the knobs of the margin plants and breaks); a third (the planting copy, and a stamp at every 100th update the fifth
+bound's hung client handles after its release). Each knob reads the environment and is a no-op unset. What they carry:
+
+* **The stamps.** One record per test run, appended as a line of JSON when the run ends: every stamp's name and wall-clock time
+  in nanoseconds (one clock for the test process and the agent it started, on one host), so the parts of a run can be set against
+  each other.
+  * The bound's start, the go notification before and after `SendNotification`; the agent's own stamps in a file it appends to
+    (it received the go, built its output, finished its write, returned); the client's first, and 1000th, update handled
+    (`TestNoLostOutput`, `TestTapErrorIgnored`); `Cmd.Wait`'s return and `done` (`watch`); which of the watcher's three events
+    ended its wait, and the connection closed; the goroutines' wait and the connection's wait in `Wait`; `Wait`'s return.
+  * `TestOutputTapVerbatim` (through `tappedFrames`, so `TestInputTapSeesWrites` too): `Close`'s call and return; `stop`'s close of
+    the agent's input; `drainTaps`' start and end; each tap `Write`'s start and end with its size.
+  * `TestCloseReadsTheAgentsLastOutput`: the go notification; each held read, at the reader's hook (the hook runs before the read,
+    so a read's size is the matching tap `Write`'s, the tap taking one `Write` a read); the agent's stamps; `done`; `Close`'s call
+    and return.
+  * `closecontext_test.go:156`, in all four subtests of both copies: the call of `CloseContext` or `KillContext` and its return,
+    the release, `Wait`'s start and return, the exit (`Cmd.Wait`'s or `Serve`'s return), and, in the third copy, the 100th,
+    200th, ... update the hung client handled after the release.
+* **The shape measured.** The tests as phase 2 will run them, with each bound lifted so that it measures the time and does not
+  cut it (the first run, below, showed a bound that cuts leaves the time unmeasured): `TestNoLostOutput` and
+  `TestTapErrorIgnored` with their agent's grace at `exitGrace`, 3 s, and `within` 120 s; `tappedFrames`' grace (the drain, the
+  watcher's read and `Close`'s first step) 120 s; `TestCloseReadsTheAgentsLastOutput`'s grace 120 s, `within` following it; the
+  fifth bound's `within(t, slack, "Wait")` 120 s, in the copy as it is at `HEAD` and in the **moved copy** (its subtests' grace and
+  `const bound` at 3 s, and the `within` that states them in graces, `bound+exitGrace+slack`). Which tests would exceed
+  today's bound is read from the measured time ("Counts", below), not from a pass or a fail.
+* **The in-process load,** the MADR's: 32 busy goroutines in the test process and `GOMAXPROCS=2`, started by an `init` of a
+  scratch-only test file when `BURN` is set, so that the load is on from the binary's start to its end and no test runs outside
+  it (not as a test, as the audit's was). The `init` does nothing in the child processes, which are the same binary.
+* **The breaks, planted** (scratch only): for `TestNoLostOutput`, the watcher closes the connection at the agent's exit, not
+  after reading to its end (MADR 0057, W2); for `TestTapErrorIgnored`, the first failed tap `Write` makes the tap's next read
+  return an error, "a tap's `Write` error returned to the connection's reader"; for `TestOutputTapVerbatim`, `tap.run` skips its
+  4th queued write; for `TestCloseReadsTheAgentsLastOutput`, `stop` closes the connection at once, which the comment at
+  `agentproc/agentproc.go:664`-`:668` forbids; for the fifth bound, which W2 gives none, **a break this phase chose**, `Wait`
+  sleeping a minute once its wait on the connection has ended, "a `Wait` that does not return once its handlers have", for the
+  coordinator to review.
+* **The margin plants** (scratch only): the thing waited for is delayed so that it ends at a set time after the bound began: the
+  1000th update's handler held until that time after `Wait`'s start (`TestNoLostOutput`, `TestTapErrorIgnored`); the output
+  tap's last `Write` held until that time after the drain's start (`TestOutputTapVerbatim`); the agent's exit held until that
+  time after it received its go (`TestCloseReadsTheAgentsLastOutput`); the 1000th update's handler held until that time after the
+  release (the fifth bound, in the moved copy).
+
+#### The chunks
+
+Every chunk's output, status and seeds are recorded; the module rounds and the in-process iterations each had their own seed, set
+explicitly (`-shuffle=<seed>`; `go test` hides the seed of a package that passes), and the plant cases ran `-test.shuffle=off`.
+
+| Chunk | Command | What | Seeds | Seconds | Rounds with a failing test |
+| :--- | :--- | :--- | :--- | ---: | ---: |
+| P1 | `sh zzburn.sh 1 1` | the whole package, first stamping copy, bounds not lifted | 1794854633547748 | 394 | 1 of 1 |
+| mod-01 | `sh zzmod.sh 1 4` | module, 4 rounds | 1794855137549260, 1794855252549606, 1794855341549874, 1794855428550136 | 386 | 1 |
+| mod-02 | `sh zzmod.sh 5 8` | module, 4 rounds | 1794855524550425, 1794855643550783, 1794855730551045, 1794855823551325 | 395 | 4 |
+| mod-03 | `sh zzmod.sh 9 12` | module, 4 rounds | 1794855919551614, 1794856036551966, 1794856126552237, 1794856215552505 | 390 | 3 |
+| mod-04 | `sh zzmod.sh 13 16` | module, 4 rounds | 1794856309552788, 1794856423553131, 1794856516553411, 1794856607553685 | 402 | 3 |
+| mod-05 | `sh zzmod.sh 17 20` | module, 4 rounds | 1794856712554001, 1794856843554395, 1794856940554687, 1794857033554967 | 422 | 4 |
+| burnsel-01 | `sh zzburnsel.sh 1 1 5` | in-process, the measured tests, `-test.count=5` | 1794857148555293 | 250 | 1 |
+| burnsel-02 | `sh zzburnsel.sh 2 2 5` | in-process, the measured tests, `-test.count=5` | 1794857401556053 | 290 | 1 |
+| burnsel-03 | `sh zzburnsel.sh 3 3 5` | in-process, the measured tests, `-test.count=5` | 1794857688556915 | 280 | 1 |
+| burnsel-04 | `sh zzburnsel.sh 4 4 5` | in-process, the measured tests, `-test.count=5` | 1794857970557762 | 246 | 1 |
+| burnfull-01 | `sh zzburn.sh 1 1` | in-process, the whole package, 1 iteration | 1794858215558494 | 348 | 1 |
+| burnfull-02 | `sh zzburn.sh 2 2` | in-process, the whole package, 1 iteration (connection lost; recovered) | 1794858563559539 | - | 1 of 1 |
+| pl-nlo | `sh zzcases.sh cases-nlo.txt` | plant cases, `TestNoLostOutput` | none (`-test.shuffle=off`) | 255 | - |
+| pl-tei | `sh zzcases.sh cases-tei.txt` | plant cases, `TestTapErrorIgnored` | none (`-test.shuffle=off`) | 532 | - |
+| pl-otv | `sh zzcases.sh cases-otv.txt` | plant cases, `TestOutputTapVerbatim` | none (`-test.shuffle=off`) | 194 | - |
+| pl-crlo | `sh zzcases.sh cases-crlo.txt` | plant cases, `TestCloseReadsTheAgentsLastOutput` | none (`-test.shuffle=off`) | 253 | - |
+| pl-cc | `sh zzcases.sh cases-cc.txt` | plant cases, the fifth bound, moved copy | none (`-test.shuffle=off`) | 445 | - |
+| burncc-01 | `sh zzburncc.sh 1 1 5` | in-process, both copies of the fifth bound, the third copy, `-test.count=5` | 1794860948566693 | 117 | 1 |
+| burncc-02 | `sh zzburncc.sh 2 2 5` | in-process, both copies of the fifth bound, the third copy, `-test.count=5` | 1794861066567048 | 114 | 1 |
+| nochunk-burnsel-01 | `sh zzburnsel.sh 1 1 5` | the script missing from the copy shipped: nothing ran | - | exit 2, 5 | - |
+| nochunk-burnsel-02 | `sh zzburnsel.sh 2 2 5` | the script missing from the copy shipped: nothing ran | - | exit 2, 4 | - |
+| nochunk-burnsel-03 | `sh zzburnsel.sh 3 3 5` | the script missing from the copy shipped: nothing ran | - | exit 2, 4 | - |
+| nochunk-burnsel-04 | `sh zzburnsel.sh 4 4 5` | the script missing from the copy shipped: nothing ran | - | exit 2, 4 | - |
+
+* **P1, the first run, kept as a finding.** The whole package, once, under the in-process load, with the first stamping copy,
+  whose graces and bounds were the tests' own (not lifted): 14 top-level tests failed, among them four of the five bounds' tests
+  (all but `TestOutputTapVerbatim`, which passed with its drain running 3005 ms, to the end of its 3 s grace, its last `Write`
+  ending with it): `TestNoLostOutput` and
+  `TestTapErrorIgnored` "Wait took longer than 3s"; `TestCloseReadsTheAgentsLastOutput` "Close = agentproc: agent terminated:
+  signal: terminated, want nil" at its 5 s grace; and the fifth bound's `Wait` in both copies ("closecontext_test.go:165: Wait
+  took longer than 3s" in the copy of `HEAD`'s test, "zz_cc_test.go:125: Wait took longer than 3s" in the moved copy, twice); and
+  class A and B tests (`TestCloseLadder`, `TestExitedFirst`, `TestProcessWaitContext`, `TestDescendantsEnded`,
+  `TestDefaultPdeathsig`, `TestTapDrainBoundedByGrace`) besides F7's. Its stamps measured only what a bound had not cut, so its
+  figures are in no table; it is why the bounds were lifted. Its failing tests are all class A, class B or F7's; none is class
+  C or D.
+* **Four attempts that ran nothing.** `zzburnsel.sh`, the in-process chunk of the measured tests, was missing from the copy the
+  four first calls shipped, `sh: cannot open zzburnsel.sh`, exit 2 within 5 s; the script was added to the copy and the four
+  chunks run again (`burnsel-01` to `-04`). The module chunks that were running had been shipped before, and are unaffected.
+* **`burnfull-02`, a lost connection.** `run-on-host` reported "ssh exited 255" 119 s into the chunk; the run itself continued on
+  the host and ended (its heavy-run lease with it). Its output file and stamps were read from the work root the dispatcher keeps
+  after a failed run, over ssh, and are the chunk's record here; the chunk's own printed summary was lost, so its seed is the
+  first line of that output and its `exit` line is not available (the output ends `FAIL`).
+* *Added 2026-11-16:* the chunks `burnfull-03` to `-11`, `pl-crlo42` and `pl-cc35` are in the addendum, below.
+
+#### The measurements
+
+Milliseconds. "Module": 20 rounds of `go test -race -shuffle=<seed> ./...`, one run of each test a round. "In-process": the
+measured tests alone, 4 iterations of `-test.count=5`, 20 runs of each test, under the in-process load. The whole-package
+iterations of the in-process load (`burnfull-01` and `-02`, 2 runs of each test) are in "The figures". The bold rows are the
+quantities the bounds wait for.
+
+##### TestNoLostOutput
+
+| Part | Module runs | Module median | Module p90 | Module max | In-process runs | In-process median | In-process p90 | In-process max |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **the bounded time: `within` start to `Wait`'s return** | 20 | 500 | 742 | 899 | 20 | 5328 | 6526 | 6920 |
+| the agent builds its 1000 updates | 20 | 7.5 | 13.2 | 16 | 20 | 7.1 | 11 | 21.6 |
+| the agent's one write, until the client has read all but a pipe's worth | 20 | 83 | 177 | 222 | 20 | 785 | 1159 | 1397 |
+| the agent's return to `Cmd.Wait`'s return | 20 | 14.9 | 36 | 41.7 | 20 | 418 | 640 | 993 |
+| `within` start to the 1000th update handled | 20 | 500 | 741 | 899 | 20 | 5315 | 6525 | 6861 |
+| `done` to the watcher closing the connection | 20 | 99.1 | 162 | 187 | 20 | 626 | 1023 | 1221 |
+| the 1000th update handled to `Wait`'s return | 20 | 0.1 | 0.2 | 0.3 | 20 | 12.8 | 213 | 320 |
+
+##### TestTapErrorIgnored
+
+| Part | Module runs | Module median | Module p90 | Module max | In-process runs | In-process median | In-process p90 | In-process max |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **the bounded time: `within` start to `Wait`'s return** | 20 | 465 | 758 | 1049 | 20 | 5056 | 5469 | 5735 |
+| the agent builds its 1000 updates | 20 | 8.2 | 14.3 | 17.1 | 20 | 6.4 | 10.4 | 21.5 |
+| the agent's one write, until the client has read all but a pipe's worth | 20 | 79.8 | 130 | 158 | 20 | 691 | 1106 | 1251 |
+| the agent's return to `Cmd.Wait`'s return | 20 | 9.7 | 26 | 32.5 | 20 | 344 | 469 | 500 |
+| `within` start to the 1000th update handled | 20 | 465 | 758 | 1048 | 20 | 4960 | 5391 | 5703 |
+| `done` to the watcher closing the connection | 20 | 92.5 | 162 | 188 | 20 | 777 | 1107 | 1226 |
+| the 1000th update handled to `Wait`'s return | 20 | 0.1 | 0.3 | 0.7 | 20 | 98.4 | 195 | 298 |
+
+##### TestOutputTapVerbatim
+
+| Part | Module runs | Module median | Module p90 | Module max | In-process runs | In-process median | In-process p90 | In-process max |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **the drain: `drainTaps`' start to its end** | 20 | 176 | 271 | 302 | 20 | 3469 | 4871 | 5596 |
+| **`Close`'s first step: the input closed to `done`** | 20 | 11.1 | 18.8 | 33.7 | 20 | 401 | 584 | 843 |
+| **the watcher: `done` to the connection closed** | 20 | 0.1 | 0.6 | 3.8 | 20 | 31.1 | 244 | 277 |
+| `Close`, called to returned | 20 | 192 | 284 | 318 | 20 | 4012 | 5282 | 6185 |
+| one tap `Write`, median (1 ms asked) | 20 | 1.4 | 2.1 | 2.4 | 20 | 169 | 206 | 223 |
+| one tap `Write`, slowest | 20 | 107 | 146 | 169 | 20 | 613 | 788 | 817 |
+| tap `Write`s ended after the drain began, of 33 | 20 | 24.5 | 28 | 29 | 20 | 20.5 | 25 | 27 |
+| the tap's first `Write` begun to its last ended | 20 | 295 | 397 | 428 | 20 | 5343 | 6445 | 6891 |
+
+##### TestCloseReadsTheAgentsLastOutput
+
+| Part | Module runs | Module median | Module p90 | Module max | In-process runs | In-process median | In-process p90 | In-process max |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **`Close`'s first step: the input closed to `done`** | 20 | 706 | 948 | 1154 | 20 | 6066 | 7325 | 7603 |
+| **the watcher: `done` to the connection closed** | 20 | 362 | 533 | 580 | 20 | 1232 | 1718 | 2114 |
+| **the drain** | 20 | 0 | 0 | 0 | 20 | 0 | 0 | 0 |
+| `Close`, called to returned | 20 | 1084 | 1428 | 1734 | 20 | 7361 | 8174 | 8817 |
+| the agent builds its 2 MiB | 20 | 41.5 | 73.5 | 77.3 | 20 | 35.9 | 51.5 | 62.2 |
+| the agent's write, until the connection has read through the held reads | 20 | 648 | 903 | 1058 | 20 | 5700 | 6697 | 6990 |
+| the agent's return to `Cmd.Wait`'s return | 20 | 10 | 36.6 | 65.3 | 20 | 462 | 619 | 874 |
+| held reads | 20 | 32 | 32 | 32 | 20 | 32 | 32 | 32 |
+| between two held reads, median (5 ms asked) | 20 | 7.3 | 8.7 | 11.5 | 20 | 25.8 | 194 | 228 |
+| between two held reads, longest | 20 | 410 | 583 | 641 | 20 | 1873 | 2300 | 2408 |
+
+
+##### The fifth bound, `Wait` after the release, all subtests, both copies
+
+| Subtest | Copy | Module runs | Module median | Module p90 | Module max | In-process runs | In-process median | In-process p90 | In-process max | Above 3 s: module, in-process, whole package |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :--- |
+| `a child, CloseContext` | as `HEAD` has it | 20 | 367 | 513 | 938 | 20 | 2955 | 3624 | 3756 | 0 of 20, 8 of 20, 0 of 2 |
+| `a child, CloseContext` | moved | 20 | 375 | 571 | 1384 | 20 | 4711 | 5306 | 6449 | 0 of 20, 20 of 20, 2 of 2 |
+| `a child, KillContext` | as `HEAD` has it | 20 | 18.8 | 81.9 | 192 | 20 | 2217 | 3726 | 4242 | 0 of 20, 5 of 20, 1 of 2 |
+| `a child, KillContext` | moved | 20 | 14.3 | 22.2 | 83.3 | 20 | 2248 | 3124 | 4119 | 0 of 20, 3 of 20, 0 of 2 |
+| `in process, CloseContext` | as `HEAD` has it | 20 | 0.1 | 0.1 | 0.3 | 20 | 0.1 | 0.1 | 41.3 | 0 of 20, 0 of 20, 0 of 2 |
+| `in process, CloseContext` | moved | 20 | 0.1 | 0.1 | 0.2 | 20 | 0.1 | 0.1 | 0.4 | 0 of 20, 0 of 20, 0 of 2 |
+| `in process, KillContext` | as `HEAD` has it | 20 | 0.1 | 0.2 | 0.2 | 20 | 0.1 | 0.3 | 482 | 0 of 20, 0 of 20, 0 of 2 |
+| `in process, KillContext` | moved | 20 | 0.1 | 0.2 | 2.6 | 20 | 0.1 | 0.1 | 284 | 0 of 20, 0 of 20, 0 of 2 |
+
+#### What the time is spent on
+
+* **`TestNoLostOutput` and `TestTapErrorIgnored`** (`agentproc/agentproc_test.go:174`, `agentproc/tap_test.go:256`). `Wait` returns
+  when the client has handled the agent's 1000th update, and the time is the client handling 1000 updates: beside the module,
+  500 ms and 465 ms (median) to the 1000th, 0.1 ms to `Wait`'s return after it; under the in-process load, 5315 ms and 4960 ms
+  (median), about 5 ms an update, and `Wait` returns a median 13 ms and 98 ms after it. The agent's part is smaller: its
+  write, until the client has read all but a pipe's worth, 785 ms and 691 ms (in-process medians), its return to `Cmd.Wait`'s
+  return 418 ms and 344 ms, the watcher's close 626 ms and 777 ms after `done`; all of it overlaps the handling. The worst
+  `TestTapErrorIgnored` run was a whole-package iteration, 7669 ms, and the worst `TestNoLostOutput` one in the tests-alone
+  load, 6920 ms.
+* **`TestOutputTapVerbatim`** (`agentproc/tap_test.go:195`, the drain, `Close`'s first step and the watcher's read share the
+  grace). The time is the output tap delivering 2 MiB in 33 `Write`s that each ask 1 ms. Beside the module a `Write` takes a
+  median 1.4 ms and the slowest 107 ms (median over runs), and the delivery 295 ms from the first `Write` to the last; under the
+  in-process load a `Write` takes a median 169 ms, the slowest 613 ms, and the delivery 5343 ms (max 6891 ms). Most of that is
+  still to do when the drain begins (a median 24.5 of the 33 `Write`s ended after it beside the module, 20.5 under the load), so
+  the drain is most of the delivery: 176 ms and 3469 ms (medians), at worst 302 ms and 5596 ms. `Close`'s first step (the agent
+  exiting at its input's end) and the watcher's read are far smaller, 844 ms and 277 ms at worst. This measures the audit's
+  finding 3, which read "about 100 ms a 64 KiB write" from the figures: under the load a `Write` that asks 1 ms takes a median
+  169 ms.
+* **`TestCloseReadsTheAgentsLastOutput`** (`agentproc/tap_test.go:377`, `:397`-`:398`). The agent's one 2 MiB write returns only
+  when the connection has read all but a pipe's worth through 32 reads, each held 5 ms by the hook; the agent exits after that.
+  Beside the module a held read cycles in a median 7.3 ms and the longest in a run takes 410 ms (median), the write 648 ms, and
+  `Close`'s first step 706 ms (max 1154 ms). Under the in-process load a read cycles in a median 25.8 ms, but a few take 1 to 2.4
+  s (the longest in a run 1873 ms median, 2409 ms at worst), so the write takes 5700 ms (max 6990 ms) and the first step 6066 ms
+  (max 7603 ms): more than the 5 s grace in 18 of the 20 runs and in both whole-package iterations. After the exit, the watcher's
+  read to the end takes a median 362 ms and 1232 ms (max 580 ms and 2114 ms); the drain takes no time (the tap is a plain buffer
+  with no delay).
+* **`closecontext_test.go:156`.** After the release, the hung client's handler returns and the connection has the rest of the
+  agent's 1000 updates to hand to the client's handler, which `Wait` waits for. In the moved copy's child `CloseContext` subtest
+  that is the whole wait: in the third copy, a median 4860 ms of its 4918 ms from the release to the 1000th update handled, and 17.5
+  ms from it to `Wait`'s return (10 runs, in-process). That the wait is the handling of the queue was counted: after the release
+  the moved copy's child `CloseContext` subtest handled all 1000 updates in 10 of 10 runs, and the copy of `HEAD`'s, whose
+  kill comes at its 300 ms bound and not at 3 s, handled 400 to 800 (the largest 100th stamped, 10 runs); so the copy of `HEAD`'s
+  test waits less (in-process median 2955 ms against 4711 ms), which is why moving the grace and the bound moves this bound too.
+  The `KillContext` subtest of the child waits less, 2248 ms in-process (the kill leaves fewer updates queued: 100 to 500 stamped
+  in the moved copy); the in-process agents' subtests have one update and wait a median 0.1 ms, 283.8 ms at worst.
+
+#### Counts
+
+Runs whose waited time exceeds the bound the test has at `HEAD` (read from the time, the bounds having been lifted). In P1, with their own bounds in force, the first, second and fourth failed and the third passed.
+
+| Bound at `HEAD` | Beside the module | In-process, tests alone | In-process, whole package |
+| :--- | ---: | ---: | ---: |
+| `TestNoLostOutput`, `Wait`, 3 s | 0 of 20 | 20 of 20 | 2 of 2 |
+| `TestTapErrorIgnored`, `Wait`, 3 s | 0 of 20 | 20 of 20 | 2 of 2 |
+| `TestOutputTapVerbatim`, the drain, `tappedFrames`' 3 s | 0 of 20 | 18 of 20 | 1 of 2 |
+| `TestCloseReadsTheAgentsLastOutput`, the first step, its 5 s | 0 of 20 | 18 of 20 | 2 of 2 |
+
+#### The figures
+
+By the PLAN's step 3: five times the worst measured over both loads, rounded up to a whole second (not to a multiple of `slack`,
+which the step allows instead). "Worst" is the largest value of the quantity the bound waits for in any run of any load: the 20
+module runs, the 20 in-process runs of the measured tests alone, and the 2 whole-package in-process runs. The quantity of a bound
+with several waits (`Close`'s first step, the watcher's read, the drain, each bounded by the one grace) is the largest of them.
+
+| Bound | Worst, module | Worst, in-process, tests alone | Worst, in-process, whole package | Worst, all | Five times | Figure |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `TestNoLostOutput`, `Wait`, `agentproc_test.go:174` | 898.8 | 6920.2 | 5492.2 | 6920.2 | 34.60 s | **35 s** |
+| `TestTapErrorIgnored`, `Wait`, `tap_test.go:256` | 1048.8 | 5734.9 | 7668.7 | 7668.7 | 38.34 s | **39 s** |
+| `TestOutputTapVerbatim`, `tappedFrames`' grace, `tap_test.go:195` (the drain; the first step 843.5 and the watcher 277.4 are less) | 302.2 | 5595.9 | 4702.6 | 5595.9 | 27.98 s | **28 s** |
+| `TestCloseReadsTheAgentsLastOutput`, grace, `tap_test.go:377` (the first step; the watcher 2114.3 and the drain 0 are less) | 1153.8 | 7602.7 | 6560.6 | 7602.7 | 38.01 s | **39 s** |
+| `closecontext_test.go:156`, as moved (all four subtests; the child `CloseContext` one) | 1384.0 | 6448.5 | 5226.9 | 6448.5 | 32.24 s | **33 s** |
+
+The arithmetic, each: 6920.2 ms x 5 = 34.601 s, up to 35 s; 7668.7 ms x 5 = 38.343 s, up to 39 s; 5595.9 ms x 5 = 27.979 s, up to
+28 s; 7602.7 ms x 5 = 38.013 s, up to 39 s; 6448.5 ms x 5 = 32.243 s, up to 33 s. Each figure follows from what the time is spent
+on, above, and none was raised until a run passed: every figure was fixed before any plant ran. `TestCloseReadsTheAgentsLastOutput`'s
+`within(c.Grace+slack)` at `tap_test.go:397` follows its grace, 39 s + 3 s = 42 s.
+
+For review, not stops:
+
+* The figures are set by the in-process load, which the MADR chose as its proof; beside the module alone, five times the worst is
+  5 s, 6 s, 2 s, 6 s and 7 s, in the order of the table. The MADR's first decision, `slack`, was 3 s: the new figures are 28 to
+  39 s, above `readyWait`'s 30 s for four of the five, and a defect that hangs one of these waits now takes up to its figure to
+  fail. A passing run takes no longer (a bound is a maximum). The rule is the MADR's W3; this phase applied it as written.
+* `TestOutputTapVerbatim`'s figure rests on the drain, as the PLAN's step 1 names it. The tap's whole delivery, from its first
+  `Write` to its last, an upper bound on any drain, has a worst of 6890.8 ms (five times, 34.45 s, 35 s); the figure of 28 s is
+  4.1 times that worst. Should the coordinator prefer the bound the drain could never exceed, it is 35 s.
+  *Annotated 2026-11-16: the line bounds the drain, not the delivery (point 5b, in the addendum); the 35 s of this bullet is not a
+  bound the line imposes, and the figure stays 28 s.*
+* The worst of 20 is a sample statistic; the whole-package iterations (2 runs of each test, all that the time allowed of the 20
+  the step asks) set one figure, `TestTapErrorIgnored`'s.
+  *Annotated 2026-11-16: superseded. The whole-package load was run to 20 iterations (the addendum); the full sample raised two
+  figures.*
+
+#### The margins and the breaks
+
+Each case on the Linux host under `-race`, with no load other than the plant (idle), the figure given to the bound by its
+environment knob, `-test.shuffle=off`. "Waited" is the time the stamps give for the thing the bound waits for. The messages are the
+tests' own, from the copy (its line numbers).
+
+| Case | Environment | Runs | Passed | Failed | Waited | Failure message (count) |
+| :--- | :--- | ---: | ---: | ---: | :--- | :--- |
+| nlo-base | `NLO_BOUND=35s` | 3 | 3 | 0 | 0.3 to 0.4 s over 3 stamped runs | - |
+| nlo-in-28s | `NLO_BOUND=35s PLANT_LAST_UPDATE=28s` | 3 | 3 | 0 | 28.0 to 28.0 s over 3 stamped runs | - |
+| nlo-out-42s | `NLO_BOUND=35s PLANT_LAST_UPDATE=42s` | 3 | 0 | 3 | 42.0 to 42.0 s over 1 stamped runs | Wait took longer than 35s (3x) |
+| nlo-break-35s | `NLO_BOUND=35s BREAK=closeAtExit` | 10 | 0 | 10 | 0.1 to 0.2 s over 10 stamped runs | the client received N of the 1000 session updates the agent wrote (10x) |
+| nlo-break-head | `BREAK=closeAtExit` | 10 | 0 | 10 | 0.1 to 0.2 s over 10 stamped runs | the client received N of the 1000 session updates the agent wrote (10x) |
+| tei-base | `TEI_BOUND=39s` | 3 | 3 | 0 | 0.3 to 0.4 s over 3 stamped runs | - |
+| tei-in-31.2s | `TEI_BOUND=39s PLANT_LAST_UPDATE=31.2s` | 3 | 3 | 0 | 31.2 to 31.2 s over 3 stamped runs | - |
+| tei-out-46.8s | `TEI_BOUND=39s PLANT_LAST_UPDATE=46.8s` | 3 | 0 | 3 | 46.8 to 46.8 s over 2 stamped runs | Wait took longer than 39s (3x) |
+| tei-break-39s | `TEI_BOUND=39s BREAK=taperr` | 10 | 0 | 10 | 3.0 to 3.0 s over 10 stamped runs | Wait = agentproc: agent terminated: signal: terminated, want nil (10x) |
+| tei-break-head | `BREAK=taperr` | 10 | 0 | 10 | 3.0 to 3.0 s over 6 stamped runs | Wait took longer than 3s (10x) |
+| otv-base | `TAPPED_GRACE=28s` | 3 | 3 | 0 | 0.1 to 0.1 s over 3 stamped runs | - |
+| otv-in-22.4s | `TAPPED_GRACE=28s PLANT_TAP_DRAIN=22.4s` | 3 | 3 | 0 | 22.5 to 22.5 s over 3 stamped runs | - |
+| otv-out-33.6s | `TAPPED_GRACE=28s PLANT_TAP_DRAIN=33.6s` | 3 | 0 | 3 | 28.0 to 28.0 s over 3 stamped runs | the output tap received 2097152 bytes, want the agent's 2097208, equal (3x) |
+| otv-break-28s | `TAPPED_GRACE=28s BREAK=tapskip` | 10 | 0 | 10 | 0.0 to 0.1 s over 10 stamped runs | the output tap received 2031672 bytes, want the agent's 2097208, equal (10x) |
+| otv-break-head | `BREAK=tapskip` | 10 | 0 | 10 | 0.0 to 0.1 s over 10 stamped runs | the output tap received 2031672 bytes, want the agent's 2097208, equal (10x) |
+| crlo-base | `LAST_GRACE=39s` | 3 | 3 | 0 | 0.4 to 0.5 s over 3 stamped runs | - |
+| crlo-in-31.2s | `LAST_GRACE=39s PLANT_EXIT_AT=31.2s` | 3 | 3 | 0 | 31.2 to 31.2 s over 3 stamped runs | - |
+| crlo-out-46.8s | `LAST_GRACE=39s PLANT_EXIT_AT=46.8s` | 3 | 0 | 3 | 39.0 to 39.0 s over 3 stamped runs | Close = agentproc: agent terminated: signal: terminated, want nil: the agent exits of itself (3x) |
+| crlo-break-39s | `LAST_GRACE=39s BREAK=lastclose` | 10 | 0 | 10 | 0.0 to 0.1 s over 10 stamped runs | Close = signal: broken pipe, want nil: the agent exits of itself (10x) |
+| crlo-break-head | `BREAK=lastclose` | 10 | 0 | 10 | 0.0 to 0.1 s over 10 stamped runs | Close = signal: broken pipe, want nil: the agent exits of itself (10x) |
+| cc-base | `CC_WAIT_BOUND=33s` | 3 | 3 | 0 | 0.3 to 0.3 s over 3 stamped runs | - |
+| cc-in-26.4s | `CC_WAIT_BOUND=33s PLANT_HUNG_LAST=26.4s` | 3 | 3 | 0 | 26.4 to 26.4 s over 3 stamped runs | - |
+| cc-out-39.6s | `CC_WAIT_BOUND=33s PLANT_HUNG_LAST=39.6s` | 3 | 0 | 3 | 39.6 to 39.6 s over 1 stamped runs | Wait took longer than 33s (3x) |
+| cc-break-33s | `CC_WAIT_BOUND=33s BREAK=waitHang` | 2 | 0 | 2 | 60.3 to 60.3 s over 2 stamped runs | Wait took longer than 33s (8x) |
+
+Each variable in "Environment" is `ZZ_`-prefixed. A `-head` case has the bound as `HEAD` has it (3 s, 3 s, 3 s, 5 s) and the other knobs unset: for `TestNoLostOutput` and `TestTapErrorIgnored` the agent's grace is phase 2's 3 s in both, not `HEAD`'s 300 ms. "Waited" has fewer stamped runs where a run failed at its bound before the waited thing ended; the dump ran first.
+
+Results, by bound:
+
+* **`TestNoLostOutput`, 35 s.** Ending at 0.8 of it (28 s), 3 of 3 passed (waited 28.0 s). Ending at 1.2 of it (42 s), 3 of 3
+  failed, "Wait took longer than 35s" (waited 42.0 s). No plant, 3 of 3 passed in 0.3 to 0.5 s. The break (the connection closed
+  at the agent's exit): 10 of 10 failed at 35 s and 10 of 10 at `HEAD`'s 3 s, each "the client received N of the 1000 session
+  updates the agent wrote", N from 432 to 475 and from 428 to 490. The figure does not touch what the break fails.
+* **`TestTapErrorIgnored`, 39 s.** 0.8 (31.2 s): 3 of 3 passed (31.2 s). 1.2 (46.8 s): 3 of 3 failed, "Wait took longer than 39s".
+  The break (a tap's `Write` error returned to the connection's reader): 10 of 10 failed at 39 s, "Wait = agentproc: agent
+  terminated: signal: terminated, want nil" after 3.0 s, by the agent's 3 s grace and not by the bound (the connection ends, the
+  agent is stopped as `Close` stops it), and 10 of 10 failed at 3 s, "Wait took longer than 3s", the bound and the grace being equal.
+  The test fails on the defect with the bound at 39 s because the defect ends the connection, which a bound does not touch.
+* **`TestOutputTapVerbatim`, 28 s.** 0.8 (22.4 s after the drain began): 3 of 3 passed (waited 22.5 s). 1.2 (33.6 s): 3 of 3
+  failed, "the output tap received 2097152 bytes, want the agent's 2097208, equal", the drain having ended at 28.0 s with the last
+  56 bytes' `Write` not done. The break (a tap that skips one queued write): 10 of 10 failed at 28 s and 10 of 10 at 3 s,
+  "the output tap received 2031672 bytes, want the agent's 2097208, equal".
+* **`TestCloseReadsTheAgentsLastOutput`, 39 s.** 0.8 (31.2 s after the agent's go): 3 of 3 passed (the agent's exit seen at 31.2
+  s). 1.2 (46.8 s): 3 of 3 failed, "Close = agentproc: agent terminated: signal: terminated, want nil: the agent exits of itself",
+  after 39.0 s, the first step. The break (`stop` closes the connection at once): 10 of 10 failed at 39 s and 10 of 10 at `HEAD`'s
+  5 s, "Close = signal: broken pipe, want nil: the agent exits of itself".
+  *Replaced 2026-11-16: the figure is 42 s; its margin plants and break re-run (the addendum).*
+* **`closecontext_test.go:156`, 33 s, in the moved copy.** 0.8 (26.4 s after the release): 3 of 3 passed (waited 26.4 s). 1.2 (39.6
+  s): 3 of 3 failed, "Wait took longer than 33s", in the child `CloseContext` subtest (the only one whose handler reaches the
+  1000th update; the `KillContext` subtest kills the agent before it has written them, and the in-process ones have one update).
+  The break (this phase's choice, above): 2 of 2 runs failed in all four subtests, "Wait took longer than 33s", 8 of 8 subtests.
+  *Replaced 2026-11-16: the figure is 35 s; its margin plants and break re-run, and the break also at `HEAD`'s 3 s (the addendum).*
+
+#### The fifth bound
+
+By question 5's answer: it is rescaled only if it still fails once its subtest's grace and grace-stated bound have moved.
+**It does.** Above 3 s, the bound as it stands, in the moved copy:
+
+* `a child, CloseContext`: 0 of 20 beside the module, 20 of 20 in-process (tests alone), 2 of 2 in the whole-package iterations
+* `a child, KillContext`: 0 of 20 beside the module, 3 of 20 in-process (tests alone), 0 of 2 in the whole-package iterations
+* `in process, CloseContext`: 0 of 20 beside the module, 0 of 20 in-process (tests alone), 0 of 2 in the whole-package iterations
+* `in process, KillContext`: 0 of 20 beside the module, 0 of 20 in-process (tests alone), 0 of 2 in the whole-package iterations
+
+and in the copy as `HEAD` has it, the child `CloseContext` subtest exceeded 3 s in 8 of 20 in-process runs and the child
+`KillContext` one in 5 of 20, none beside the module. In P1, where the 3 s bound was in force, both child subtests of the moved
+copy failed it, and one of `HEAD`'s. So the move of the grace and the bound does not make `closecontext_test.go:156` pass under the
+in-process load; it makes it fail more often than before, since the child then writes all 1000 updates before the context's end.
+By steps 3 to 5 the figure is **33 s** (6448.5 ms x 5 = 32.243 s, up to 33 s), with its margin and its break as above. Phase 2
+rescales that one line, for all four subtests, to 33 s.
+
+#### W4
+
+No bound stops: for each of the five, a figure follows from the measurement, its margin passes at 0.8 and fails at 1.2, and the
+break that fails the test at `HEAD`'s bound fails it at the figure. The fifth bound's break is this phase's choice, W2 having none
+for it, and is put to the coordinator for review with the figures' size, above.
+
+#### What distorted a measurement, and the odd runs
+
+* **Queue and other agents' work:** none; every chunk started at once (`waited=0s`) and the host ran only this phase's heavy runs
+  (each chunk printed `uptime` at its start, a 1-minute load of 0.08 to 3.04 on four CPUs; the larger ones are the previous chunk's
+  own tail, chunks following each other at once).
+* **F7's tests, as load:** the module rounds ran the two 56 MiB tests and `TestBlockedTapDetached` as CI does, and they moved
+  megabytes and waited 30 s in most rounds (below). They are part of the module load as measured, and not separated from it. This
+  changes no figure: each is set by an in-process sample, the module's worst being 1.3 to 7 times smaller than it. A run with them
+  skipped was not made.
+* **A stamp's order:** `go-sent` is sometimes later than the agent's receipt of the go (down to -200 ms in P1's
+  `TestTapErrorIgnored`): `SendNotification` returns after the agent has read, and the caller's goroutine was starved. The
+  bound starts when `SendNotification` returns, which is what `within-start` stamps; the time before it is not in the quantity,
+  and is not a clock error (one clock for both processes).
+* **Failed assertions with the bounds lifted:** the copy of `HEAD`'s `TestCloseContextBoundsHandlers` failed in all 20 runs of
+  the in-process load (its child subtests: "CloseContext = context deadline exceeded ... want the bound's cause and
+  acp.ErrHandlersRunning", at its 300 ms grace and bound), and in none beside the module. That is W1's, not this phase's: the
+  quantity measured, `Wait` after the release, was stamped all the same. No other measured test failed in the tests-alone load.
+  The whole-package iterations failed class A and B tests only, besides F7's (below).
+
+#### F7's tests, counted apart
+
+Run, not skipped, in the module rounds and in the whole-package iterations. Beside the module, 20 rounds: `TestDetachedTapIsPrefix`
+failed in 14 ("the bulk agent did not say it was ready within 30s", `tap_test.go:365` in the copy, and once "Close = agentproc:
+agent terminated: signal: terminated"), `TestInProcessDetachedTapIsPrefix` in 7 ("the connection did not read Serve's first 56
+MiB within 30s"), `TestBlockedTapDetached` in 2 ("the bulk agent did not say it was ready within 30s"); 15 of the 20 rounds had
+at least one of them fail, 5 none; no other test failed in a module round. In the two whole-package in-process iterations
+(`burnfull-01`, `-02`) all three failed in both, besides class A and B tests: `TestCloseLadder`, `TestCallersCommandKept`,
+`TestCallersPdeathsigKept`, `TestDefaultPdeathsig`, `TestExitedFirst`, `TestProcessWaitContext`, `TestLineTapAsOutputTap`,
+`TestTapDrainBoundedByGrace`, `TestCloseContextBoundsHandlers` (the copy of `HEAD`'s, its child subtests) in both, and
+`TestTapKeepsCloseEnding`, `TestKillAfterExit`, `TestDescendantsEnded` in one and `TestEscapedDescendantDoesNotHoldWait` in the other. None is class C or D;
+the five bounds' tests, with their bounds lifted, did not fail there. Not counted as passes, nor as this phase's failures.
+
+#### Not verified
+
+* The figures are from one 4-CPU Linux host under `-race`; CI's runners, macOS and Windows were not measured, and the module
+  load here includes F7's tests moving megabytes where CI's step passes them.
+* Twenty module rounds and twenty runs of the tests alone are a sample: a worst of 20 is not the worst there is. The whole-package
+  load, the realest in-process shape, ran 2 iterations of the 20 the step asks (about 6 minutes each); one of its two runs set
+  a figure (`TestTapErrorIgnored`'s). Whether a third would have raised others was not measured.
+  *Annotated 2026-11-16: superseded; the whole-package load was run to 20 iterations (the addendum), and the further iterations
+  raised two figures.*
+* The measured copies are phase 2's shape, not phase 2's edits: no test was moved in the tree, and `startCmdGrace`, `exitGrace`
+  and the rest do not exist yet. The moved copy of the fifth bound is a copy of the test with the three constants changed.
+* A margin plant delays one wait by a sleep; it shows where the bound's edge is, not that the delayed run would otherwise last
+  so long, and it ran idle, not under load. The plants delay the waited thing and no other part.
+* The breaks were chosen to fit W2's descriptions (and the fifth bound's by this phase); that each is the defect its bound is
+  for was read, not proved. `TestTapErrorIgnored`'s break fails by the agent's 3 s grace, not by its bound, which is the way
+  the defect shows.
+* The stamps' own cost (a lock and an append each) was not measured.
+* `GOMAXPROCS=2` was inherited by the agent children the tests start, as in the audit's rounds; the agents are not starved by
+  the in-process load, only slowed by two Ps.
+
+#### Files, checks and staging
+
+Touched: this PLAN (this entry; phase 1b's step 8; the question 5 annotation and answer), the MADR (question 5's answer) and
+`docs/README.md` (the MADR's and the PLAN's rows). Not touched: any test or source file, any workflow, any script. Scratch only,
+not staged: the three copies' builder scripts and Go files, the chunk scripts and cases, the analysis and table scripts, every
+chunk's output and the tables; the tools are saved outside the scratch folder for phase 2, whose stamping and planting tools
+they are.
+
+After the last edit, with the PLAN, the MADR and `docs/README.md` staged: `python3 -B scripts/check_records.py --check-all`,
+`python3 -B scripts/check_disclosure.py` and `markdownlint-cli2` v0.23.2, each exit 0. Staged, not committed, not pushed.
+
+#### Addendum, 2026-11-16, after the coordinator's review: the whole-package load completed to 20, and two figures replaced
+
+Added the same day, on the coordinator's message that a figure resting on 2 whole-package runs is a gap in a step that is in scope.
+Nothing above is rewritten: where it is superseded, it is annotated and points here.
+
+* **The PLAN's sentence, and what met it.** Step 2 of phase 1b: "**Two loads**, each test 20 runs under each, `-race`: beside the
+  whole module's `go test -race -shuffle=on ./...`, as CI's step runs; and the in-process load (32 busy goroutines,
+  `GOMAXPROCS=2`) started from the scratch test binary's own start, by an `init` in a scratch-only file when `BURN` is set, so that it
+  lasts the whole run and no test runs outside it." The step asks for 20 runs of each test under each load, not for 20 iterations
+  of the whole package; the `burnsel` chunks (the measured tests alone, 20 runs each) met it, and the whole-package iterations were
+  this phase's own addition, a cross-check on a heavier shape. The question was only whether a figure may rest on the two-run
+  sample of that addition. It may not: it set `TestTapErrorIgnored`'s figure. So the whole-package load was run to 20 iterations,
+  and all the figures are recomputed from the full data.
+* **The chunks.** Iterations 3 to 20, two to a chunk, each through `run-on-host --need linux --race --`, one at a time on the host,
+  never a WSL distro, each with `waited=0s`. The host-side script (`zzburn2.sh`) wrote each iteration's output, its exit status and
+  its stamps to files kept on the host outside the dispatcher's work root, so that a lost connection could not lose an `exit`
+  line; none was lost in these nine chunks, and the host-side record was not needed. Iteration 2 stays as recovered over ssh (the
+  first report); its `exit` line was not recorded.
+
+| Chunk | Command | Iterations | Seeds | Seconds | Iterations with a failing test |
+| :--- | :--- | :--- | :--- | ---: | ---: |
+| burnfull-03 | `sh zzburn2.sh bf03 3 4` | 3 to 4 | 1794861880569491, 1794862299570749 | 419, 341 (dispatch exit 0) | 2 of 2 |
+| burnfull-04 | `sh zzburn2.sh bf04 5 6` | 5 to 6 | 1794862656571821, 1794862996572842 | 339, 336 (dispatch exit 0) | 2 of 2 |
+| burnfull-05 | `sh zzburn2.sh bf05 7 8` | 7 to 8 | 1794863347573896, 1794863695574941 | 348, 319 (dispatch exit 0) | 2 of 2 |
+| burnfull-06 | `sh zzburn2.sh bf06 9 10` | 9 to 10 | 1794864030575947, 1794864344576890 | 314, 331 (dispatch exit 0) | 2 of 2 |
+| burnfull-07 | `sh zzburn2.sh bf07 11 12` | 11 to 12 | 1794864690577929, 1794865028578944 | 338, 328 (dispatch exit 0) | 2 of 2 |
+| burnfull-08 | `sh zzburn2.sh bf08 13 14` | 13 to 14 | 1794865371579974, 1794865681580905 | 310, 352 (dispatch exit 0) | 2 of 2 |
+| burnfull-09 | `sh zzburn2.sh bf09 15 16` | 15 to 16 | 1794866048582007, 1794866392583040 | 344, 359 (dispatch exit 0) | 2 of 2 |
+| burnfull-10 | `sh zzburn2.sh bf10 17 18` | 17 to 18 | 1794866770584175, 1794867156585334 | 386, 316 (dispatch exit 0) | 2 of 2 |
+| burnfull-11 | `sh zzburn2.sh bf11 19 20` | 19 to 20 | 1794867699586964, 1794868036587976 | 337, 386 (dispatch exit 0) | 2 of 2 |
+| pl-crlo42 | `sh zzcases.sh cases-crlo42.txt` | plant cases, `TestCloseReadsTheAgentsLastOutput` at 42 s | none (`-test.shuffle=off`) | 262 | - |
+| pl-cc35 | `sh zzcases.sh cases-cc35.txt` | plant cases, the fifth bound at 35 s, and at 3 s | none (`-test.shuffle=off`) | 723 | - |
+
+* **The whole-package iterations' failures,** 20 iterations (iteration 2 from its recovered output), a count of the iterations each
+  test failed in:
+
+  | Iterations failed (of 20) | Test |
+  | ---: | :--- |
+  | 20 | `TestBlockedTapDetached` |
+  | 20 | `TestCloseContextBoundsHandlers` |
+  | 20 | `TestCloseContextBoundsHandlers/a_child,_CloseContext` |
+  | 20 | `TestCloseContextBoundsHandlers/a_child,_KillContext` |
+  | 20 | `TestCloseLadder` |
+  | 20 | `TestCloseLadder/exits_at_its_input's_end` |
+  | 20 | `TestCloseLadder/exits_on_SIGTERM` |
+  | 20 | `TestDetachedTapIsPrefix` |
+  | 20 | `TestExitedFirst` |
+  | 20 | `TestExitedFirst/the_agent_exits_first` |
+  | 20 | `TestExitedFirst/the_connection_ends_first` |
+  | 20 | `TestInProcessDetachedTapIsPrefix` |
+  | 20 | `TestTapDrainBoundedByGrace` |
+  | 18 | `TestProcessWaitContext` |
+  | 15 | `TestCallersPdeathsigKept` |
+  | 15 | `TestProcessWaitContext/one_goroutine` |
+  | 14 | `TestCallersCommandKept` |
+  | 14 | `TestDefaultPdeathsig` |
+  | 14 | `TestLineTapAsOutputTap` |
+  | 14 | `TestProcessWaitContext/ctx_ends_first` |
+  | 13 | `TestDescendantsEnded` |
+  | 12 | `TestDescendantsEnded/the_agent_exits_at_its_input's_end` |
+  | 7 | `TestTapKeepsCloseEnding` |
+  | 3 | `TestInProcessKill` |
+  | 3 | `TestKillAfterExit` |
+  | 2 | `TestDescendantsEnded/the_agent_exits_of_itself` |
+  | 2 | `TestEscapedDescendantDoesNotHoldWait` |
+  | 1 | `TestCloseContextBoundsHandlers/in_process,_KillContext` |
+  | 1 | `TestConnectionEndStopsAgent` |
+  | 1 | `TestConnectionEndStopsAgent/a_notification_overflow` |
+  | 1 | `TestProcessWaitContext/the_agent_ends_first` |
+
+  Each is a class A or B test of the audit's table, `TestCloseContextBoundsHandlers/in_process,_KillContext` (one of W1's four), or
+  F7's (`TestBlockedTapDetached`, `TestDetachedTapIsPrefix` and `TestInProcessDetachedTapIsPrefix`, each in 20 of 20); none is a
+  class C or D test, and the five bounds' tests, with their bounds lifted, did not fail. F7's three are counted apart, not as passes
+  or as this phase's failures. Several class A tests the audit's five rounds had not seen fail failed here (`TestTapKeepsCloseEnding`,
+  `TestKillAfterExit`, `TestEscapedDescendantDoesNotHoldWait`, `TestInProcessKill`), which is what the load's covering the whole run
+  was for.
+
+#### The figures, from the full data
+
+Milliseconds. For each bound, median, p90 and max over the 20 runs of each load; "whole package" is now 20 iterations. The
+quantity is the one the figure's bound waits for, as above. Five times the worst over all three samples, rounded up to a whole
+second.
+
+| Bound | Module, 20: median / p90 / max | In-process, tests alone, 20: median / p90 / max | In-process, whole package, 20: median / p90 / max | Worst | Five times | Figure | First report's |
+| :--- | :--- | :--- | :--- | ---: | ---: | ---: | ---: |
+| `TestNoLostOutput`, `Wait` | 20: 500 / 742 / 899 | 20: 5328 / 6526 / 6920 | 20: 5453 / 6146 / 6421 | 6920.2 | 34.60 s | **35 s** | 35 s |
+| `TestTapErrorIgnored`, `Wait` | 20: 465 / 758 / 1049 | 20: 5056 / 5469 / 5735 | 20: 5295 / 6691 / 7669 | 7668.7 | 38.34 s | **39 s** | 39 s |
+| `TestOutputTapVerbatim`, the drain (`tap_test.go:195`) | 20: 176 / 271 / 302 | 20: 3469 / 4871 / 5596 | 20: 3895 / 4655 / 5086 | 5595.9 | 27.98 s | **28 s** | 28 s |
+| `TestCloseReadsTheAgentsLastOutput`, the first step | 20: 706 / 948 / 1154 | 20: 6066 / 7325 / 7603 | 20: 6277 / 7244 / 8297 | 8297.0 | 41.49 s | **42 s** | 39 s |
+| `closecontext_test.go:156`, as moved, all four subtests | 80: 4.4 / 379 / 1384 | 80: 374 / 4855 / 6449 | 80: 776 / 4882 / 6821 | 6820.8 | 34.10 s | **35 s** | 33 s |
+
+What changed, and what did not:
+
+* **`TestNoLostOutput`: unchanged, 35 s.** The worst is still 6920.2 ms (the tests-alone load, chunk `burnsel-04`); the 20 whole-package runs' worst is 6421.0 ms (iteration 4), beside it. 6920.2 ms x 5 = 34.601 s, up to 35 s.
+* **`TestTapErrorIgnored`: unchanged, 39 s.** The worst is still 7668.7 ms, the whole-package iteration 1, now the largest of 20 and no longer of 2; the tests-alone worst is 5734.9 ms. 7668.7 ms x 5 = 38.343 s, up to 39 s.
+* **`TestOutputTapVerbatim`: unchanged, 28 s.** The worst drain is still 5595.9 ms (tests alone); the whole-package worst is 5086.0 ms (iteration 12), beside it. 5595.9 ms x 5 = 27.979 s, up to 28 s.
+* **`TestCloseReadsTheAgentsLastOutput`: replaced, 39 s by 42 s.** The whole-package load's iteration 5 had the first step take 8297.0 ms, above the 7602.7 ms the figure of 39 s rested on. 8297.0 ms x 5 = 41.485 s, up to 42 s. The first report's 39 s stands in the record above as what it was, and is replaced by 42 s: the full data's worst, by the same rule. `within(c.Grace+slack)` at `tap_test.go:397` follows, 42 s + 3 s = 45 s.
+* **`closecontext_test.go:156`: replaced, 33 s by 35 s.** The whole-package load's iteration 13 had the child `CloseContext` subtest's `Wait` take 6820.8 ms, above the 6448.5 ms the figure of 33 s rested on. 6820.8 ms x 5 = 34.104 s, up to 35 s. The first report's 33 s stands above as what it was, replaced by 35 s.
+
+The old figures stay where they were written (the first report's table and results, above), annotated with what replaced them; they
+were fixed before any plant ran, as were these, and neither set was raised until a run passed.
+
+#### The worst against the rest
+
+For each bound, the five largest values of each load, and how far the largest stands above the p90 and above the next, so that a
+reader can tell an outlier from the edge of a steady spread.
+
+| Bound | Load | Median | p90 | Max | Five largest | Max / p90 | Max above the next |
+| :--- | :--- | ---: | ---: | ---: | :--- | ---: | ---: |
+| TestNoLostOutput | module | 500 | 742 | 899 | 899, 788, 742, 733, 637 | 1.21 | 111 ms |
+| TestNoLostOutput | in-process, tests alone | 5328 | 6526 | 6920 | 6920, 6861, 6526, 6343, 6149 | 1.06 | 59 ms |
+| TestNoLostOutput | in-process, whole package | 5453 | 6146 | 6421 | 6421, 6303, 6146, 6034, 6005 | 1.04 | 118 ms |
+| TestTapErrorIgnored | module | 465 | 758 | 1049 | 1049, 793, 758, 756, 700 | 1.38 | 256 ms |
+| TestTapErrorIgnored | in-process, tests alone | 5056 | 5469 | 5735 | 5735, 5703, 5469, 5429, 5411 | 1.05 | 32 ms |
+| TestTapErrorIgnored | in-process, whole package | 5295 | 6691 | 7669 | 7669, 6700, 6691, 6688, 6605 | 1.15 | 969 ms |
+| TestOutputTapVerbatim (drain) | module | 176 | 271 | 302 | 302, 281, 271, 254, 249 | 1.12 | 21 ms |
+| TestOutputTapVerbatim (drain) | in-process, tests alone | 3469 | 4871 | 5596 | 5596, 5430, 4871, 4601, 4370 | 1.15 | 166 ms |
+| TestOutputTapVerbatim (drain) | in-process, whole package | 3895 | 4655 | 5086 | 5086, 4703, 4655, 4558, 4536 | 1.09 | 383 ms |
+| TestCloseReadsTheAgentsLastOutput (first step) | module | 706 | 948 | 1154 | 1154, 1008, 948, 923, 894 | 1.22 | 146 ms |
+| TestCloseReadsTheAgentsLastOutput (first step) | in-process, tests alone | 6066 | 7325 | 7603 | 7603, 7362, 7325, 6799, 6701 | 1.04 | 241 ms |
+| TestCloseReadsTheAgentsLastOutput (first step) | in-process, whole package | 6277 | 7244 | 8297 | 8297, 7512, 7244, 6878, 6771 | 1.15 | 785 ms |
+| fifth, moved, child CloseContext | module | 375 | 571 | 1384 | 1384, 774, 571, 474, 423 | 2.43 | 610 ms |
+| fifth, moved, child CloseContext | in-process, tests alone | 4711 | 5306 | 6449 | 6449, 5963, 5306, 5279, 5210 | 1.22 | 485 ms |
+| fifth, moved, child CloseContext | in-process, whole package | 4734 | 5865 | 6821 | 6821, 5944, 5865, 5484, 5277 | 1.16 | 877 ms |
+
+Read: in the tests-alone load the maximum is 1.04 to 1.22 times the p90 and 32 to 485 ms above the next value, the edge of a
+spread (the fifth bound's, 6448.5 ms, is the widest, 1.22 and 485 ms). The whole-package samples are wider at the top:
+`TestTapErrorIgnored`'s maximum, 7668.7 ms, stands 969 ms above the next (6700.0 ms) and 1.15 times the p90, one run (iteration 1)
+above a steady 6600 to 6700 ms; `TestCloseReadsTheAgentsLastOutput`'s, 8297.0 ms, 785 ms above the next (7512.1 ms, iteration 5);
+the fifth bound's, 6820.8 ms, 877 ms above the next (5944 ms, iteration 13). Under the rule they set their figures, being the
+worst measured; without them the three figures would be 34 s, 39 s and 33 s (6700.0, 7602.7 and 6448.5 ms, times five, up). The
+module's maxima stand 1.12 to 2.43 times their p90, the spread being a tenth of the in-process one's, and set no figure.
+
+#### The margins and the breaks, again, for the two figures that changed
+
+The same cases as above, at the new figures (idle, `-race`, `-test.shuffle=off`; the knobs and plants are those above).
+
+| Case | Environment | Runs | Passed | Failed | Waited | Failure message (count) |
+| :--- | :--- | ---: | ---: | ---: | :--- | :--- |
+| crlo-base-42s | `LAST_GRACE=42s` | 3 | 3 | 0 | 0.4 to 0.5 s over 3 stamped runs | - |
+| crlo-in-33.6s | `LAST_GRACE=42s PLANT_EXIT_AT=33.6s` | 3 | 3 | 0 | 33.6 to 33.6 s over 3 stamped runs | - |
+| crlo-out-50.4s | `LAST_GRACE=42s PLANT_EXIT_AT=50.4s` | 3 | 0 | 3 | 42.0 to 42.0 s over 3 stamped runs | Close = agentproc: agent terminated: signal: terminated, want nil: the agent exits of itself (3x) |
+| crlo-break-42s | `LAST_GRACE=42s BREAK=lastclose` | 10 | 0 | 10 | 0.0 to 0.0 s over 10 stamped runs | Close = signal: broken pipe, want nil: the agent exits of itself (10x) |
+| cc-base-35s | `CC_WAIT_BOUND=35s` | 3 | 3 | 0 | 0.3 to 0.4 s over 3 stamped runs | - |
+| cc-in-28s | `CC_WAIT_BOUND=35s PLANT_HUNG_LAST=28s` | 3 | 3 | 0 | 28.0 to 28.0 s over 3 stamped runs | - |
+| cc-out-42s | `CC_WAIT_BOUND=35s PLANT_HUNG_LAST=42s` | 3 | 0 | 3 | 42.0 to 42.0 s over 2 stamped runs | Wait took longer than 35s (3x) |
+| cc-break-35s | `CC_WAIT_BOUND=35s BREAK=waitHang` | 2 | 0 | 2 | 60.3 to 60.3 s over 2 stamped runs | Wait took longer than 35s (8x) |
+| cc-break-3s-moved | `BREAK=waitHang` | 2 | 0 | 2 | 60.3 to 60.3 s over 2 stamped runs | Wait took longer than 3s (8x) |
+| cc-break-3s-head | `BREAK=waitHang` | 2 | 0 | 2 | - | Wait took longer than 3s (8x) |
+
+A `-3s` case has the bound as `HEAD` has it, 3 s, and no other knob but the break; `-3s-head` runs the copy of `HEAD`'s `TestCloseContextBoundsHandlers`, whose four subtests run the same `Wait` bound.
+
+* **`TestCloseReadsTheAgentsLastOutput`, 42 s.** 0.8 (33.6 s after the agent's go): 3 of 3 passed. 1.2 (50.4 s): 3 of 3 failed,
+  "Close = agentproc: agent terminated: signal: terminated, want nil: the agent exits of itself", after 42.0 s. The break (`stop`
+  closes the connection at once): 10 of 10 failed, "Close = signal: broken pipe, want nil: the agent exits of itself".
+* **`closecontext_test.go:156`, 35 s, in the moved copy.** 0.8 (28 s after the release): 3 of 3 passed. 1.2 (42 s): 3 of 3 failed,
+  "Wait took longer than 35s" in the child `CloseContext` subtest. The break (this phase's choice, "5a" below): 2 of 2 runs failed in all four subtests at 35 s (Wait took longer than 35s (8x)); at `HEAD`'s 3 s, 2 of 2 runs of the moved copy (Wait took longer than 3s (8x)), and 2 of 2 runs of the copy of `HEAD`'s test (Wait took longer than 3s (8x)).
+
+#### Point 5a: the defect `closecontext_test.go:156` is for, and the fifth bound's break
+
+*The break below is the executing agent's choice, W2 giving none for this bound; it is for the coordinator to confirm.*
+
+*Confirmed 2026-11-16 by the coordinator, as the coordinator's confirmation and not the owner's, on this evidence: the test's comment
+says that once the handler is released `Wait` returns the agent's error; the break delays `Wait`'s return after its connection wait
+has ended; and it fails `HEAD`'s test at 3 s in all four subtests, in 2 of 2 runs.*
+
+* **What the line is for.** The test's own comment (`closecontext_test.go:118`-`:124`) says that `CloseContext` and `KillContext`
+  return within their bound, with `acp.ErrHandlersRunning` joined, "when a client handler ignores its context", and that "Once the
+  handler is released, Wait returns that agent's error, which Close or Kill would have returned" (the amendment of 2026-10-30,
+  X1 and X2, of [0042-MADR-in-process-agent-runner.md](0042-MADR-in-process-agent-runner.md)). The code that follows the release is
+  `release()` and `_, werr := within(t, slack, "Wait", p.Wait)` (`closecontext_test.go:155`-`:156`), then the assertion on `werr`.
+  X1's text says what a `Wait` that returns means ("a `Wait` that returns still means that every handler the connection ran has
+  returned", I7), and `Process.Wait`'s doc (`agentproc/agentproc.go:408`-`:411`) says it waits for the connection's goroutines
+  without bound, until the handler returns. So the bound at `:156` is the test's check that, once the handler is released, `Wait`
+  does return: the defect it catches is a `Wait` (or the one goroutine `CloseContext` and `KillContext` share with
+  `WaitContext`) left blocked after its handlers have returned, so that a caller who bounded the close and released the handler
+  still waits for ever.
+* **Why the break is that defect.** The break lets `Wait`'s wait on the connection end, which is the handlers' return, and then
+  makes `Wait` sleep a minute before it returns: `Wait` does not return once its handlers have. It is placed after the point at
+  which `connWaitEnded` is set, so that `CloseContext`'s own check (the error joins `acp.ErrHandlersRunning` only while the wait on
+  the connection is pending) is unaffected and only the post-release `Wait` fails, which is the line's assertion and nothing else.
+* **It fails at `HEAD`'s 3 s as well as at the figure,** in the moved copy and in the copy of `HEAD`'s test (table above): the same
+  break with no bound knob, 3 s.
+
+#### Point 5b: what the line at `agentproc/tap_test.go:195` bounds
+
+The line is `p = startTapped(t, "frames", nil, slack, out, in, acp.WithMaxMessageSize(1<<20))`: `slack` is the agent's `Grace`. The
+comment above `tappedFrames` (`tap_test.go:186`-`:191`) says why: "Wait gives the taps up to the grace to drain". The grace is read by
+three timers in the product, each started where its own wait starts:
+
+* `Close`'s first step, `case p.exitedWithin(p.grace):` (`agentproc/agentproc.go:658`), from the agent's input's close;
+* the watcher's, `t := time.NewTimer(p.grace)` (`agentproc/agentproc.go:368`), from the agent's exit, for the connection to read
+  to the end of the agent's output;
+* the drain's, `t := time.NewTimer(p.grace)` in `drainTaps` (`agentproc/agentproc.go:529`), from the drain's start, over
+  `select { case <-tp.done: continue; case <-t.C: expired = true }` (`:538`-`:543`).
+
+No timer starts at the tap's first `Write`, so the line does **not** bound the tap's whole delivery: the `Write`s that are done
+before the drain starts, and the time they took, are outside every timer. What the test then needs, at `:218`-`:222`, is that the
+tap has received every byte when `Close` returns, which the drain's timer ending at the grace puts at risk (the tap is abandoned and
+what it has not written is dropped, `agentproc/tap.go:76`). The line therefore waits on three things, each of its own start, and
+the greatest of their worsts is what the figure must cover: the drain, 5595.9 ms (the first step's worst is 843.5 ms and the
+watcher's 281.9 ms, beside it). The whole delivery's worst, 6890.8 ms, is not a time the line waits for; it is only the longest the
+drain could ever take, were it to start with the first `Write`. The figure, 28 s, is for the drain, and is unchanged by the full
+data.
+
+#### Not verified, as it now stands
+
+The bullet "The worst of 20 is a sample statistic; the whole-package iterations (2 runs ...)" in "For review", and the one under "Not
+verified" that says the whole-package load ran 2 of the 20 iterations, are superseded: all three samples are 20 runs of each test.
+What stays: the figures are from one 4-CPU Linux host under `-race`; the worst of 20 is still a sample statistic, and the
+maximum of three whole-package figures stands one run above its spread (above); a margin plant delays one wait, idle; each break
+was read, not proved, to be the defect its bound is for.
+
+#### The addendum's files, checks and staging
+
+Touched: this PLAN (the addendum and the annotations of the entry above) and `docs/README.md` (the PLAN's row). Not touched: any test or
+source file, any workflow, any script; the MADR is as the entry above left it. The new scripts (`zzburn2.sh`, the plant cases, the
+addendum's table scripts) are scratch only, not staged, saved with the other tools for phase 2.
+
+After the last edit, with the PLAN, the MADR and `docs/README.md` staged: `python3 -B scripts/check_records.py --check-all`,
+`python3 -B scripts/check_disclosure.py` and `markdownlint-cli2` v0.23.2, each exit 0. Staged, not committed, not pushed.
