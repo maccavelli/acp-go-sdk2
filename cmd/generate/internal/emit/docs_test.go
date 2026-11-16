@@ -1,10 +1,15 @@
 package emit
 
 import (
+	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/load"
 	"github.com/maccavelli/acp-go-sdk2/cmd/generate/internal/model"
 )
 
@@ -129,4 +134,153 @@ func TestWrapDoc(t *testing.T) {
 	if got := wrapDoc("short"); !slices.Equal(got, []string{"short"}) {
 		t.Errorf("wrapDoc(short) = %q", got)
 	}
+}
+
+// TestDiscDoc requires the sentence about a variant's discriminator field to
+// name the field, the JSON key and the value the schema fixes, or, for a
+// key-less variant of a union with a catch-all, to say the schema leaves it
+// absent or null; and no sentence for any other variant
+// (0056-PLAN-bring-the-docs-current-and-keep-them-current.md, phase 4b).
+func TestDiscDoc(t *testing.T) {
+	t.Parallel()
+	inline := &model.Inline{Fields: []*model.Field{{Key: "kind", Name: "Kind"}, {Key: "x", Name: "X"}}}
+	withCatchAll := &model.Type{DiscKey: "kind", DiscField: "Kind", CatchAll: 1}
+	noCatchAll := &model.Type{DiscKey: "kind", DiscField: "Kind", CatchAll: -1}
+	const (
+		fixed  = `Its Kind field holds the "kind" discriminator, which the schema fixes at "a".`
+		absent = `Its Kind field holds the "kind" discriminator, which the schema leaves absent or null for this variant.`
+	)
+	for _, tt := range []struct {
+		name string
+		t    *model.Type
+		vi   *model.Variant
+		want string
+	}{
+		{"a value", noCatchAll, &model.Variant{Inline: inline, DiscValue: "a",
+			ConstPairs: [][2]string{{"kind", "a"}}, ConstFields: []string{"Kind"}}, fixed},
+		{"a value after another constant", noCatchAll, &model.Variant{Inline: inline, DiscValue: "a",
+			ConstPairs: [][2]string{{"aaa", "z"}, {"kind", "a"}}, ConstFields: []string{"Aaa", "Kind"}}, fixed},
+		{"a value no string field holds", noCatchAll, &model.Variant{Inline: inline, DiscValue: "a",
+			ConstPairs: [][2]string{{"kind", "a"}}}, ""},
+		{"a variant with a $ref", noCatchAll, &model.Variant{DiscValue: "a",
+			ConstPairs: [][2]string{{"kind", "a"}}, ConstFields: []string{"Kind"}}, ""},
+		{"key-less, in a union with a catch-all", withCatchAll, &model.Variant{Inline: inline, KeyLess: true}, absent},
+		{"key-less, in a union without one", noCatchAll, &model.Variant{Inline: inline, KeyLess: true}, ""},
+		{"key-less, without the field", withCatchAll, &model.Variant{KeyLess: true,
+			Inline: &model.Inline{Fields: []*model.Field{{Key: "x", Name: "X"}}}}, ""},
+		{"the catch-all", withCatchAll, &model.Variant{Inline: inline}, ""},
+		{"a union without a discriminator", &model.Type{CatchAll: -1}, &model.Variant{Inline: inline}, ""},
+	} {
+		if got := strings.Join(discDoc(tt.t, tt.vi), " "); got != tt.want {
+			t.Errorf("%s: discDoc = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}
+
+// typeDocs returns the doc comment text of each type declared in src.
+func typeDocs(t *testing.T, src string) map[string]string {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "src.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	docs := map[string]string{}
+	for _, d := range file.Decls {
+		if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.TYPE {
+			for _, s := range g.Specs {
+				docs[s.(*ast.TypeSpec).Name.Name] = g.Doc.Text()
+			}
+		}
+	}
+	return docs
+}
+
+// TestVariantDocsNameTheDiscriminator renders a union with two variants that
+// have a value, a catch-all and a key-less variant, and a union whose
+// key-less variant may also be named by a present value, and requires each
+// variant type's doc to keep its first line and to carry discDoc's sentence
+// as its second paragraph, or no such sentence
+// (0056-PLAN-bring-the-docs-current-and-keep-them-current.md, phase 4b).
+func TestVariantDocsNameTheDiscriminator(t *testing.T) {
+	t.Parallel()
+	var schema load.Schema
+	if err := json.Unmarshal([]byte(`{"$defs":{
+		"U":{"description":"A union.","anyOf":[
+			{"title":"a","description":"The a variant.","type":"object","required":["kind"],
+				"properties":{"kind":{"type":"string","const":"a"},"x":{"type":"string"}}},
+			{"title":"b","type":"object","required":["kind"],"properties":{"kind":{"type":"string","const":"b"}}},
+			{"title":"other","type":"object","required":["kind"],"properties":{"kind":{"type":"string","description":"Another kind."}},
+				"not":{"anyOf":[{"type":"object","required":["kind"],"properties":{"kind":{"type":"string","const":"a"}}},
+					{"type":"object","required":["kind"],"properties":{"kind":{"type":"string","const":"b"}}}]}},
+			{"title":"none","description":"No kind.","type":"object","properties":{"kind":{"type":"null"}}}]},
+		"V":{"anyOf":[
+			{"title":"c","type":"object","required":["kind"],"properties":{"kind":{"type":"string","const":"c"}}},
+			{"title":"plain","type":"object","properties":{"kind":{"type":"null"}}}]}}}`), &schema); err != nil {
+		t.Fatal(err)
+	}
+	m, err := model.Build(model.Input{Meta: &load.Meta{}, Schema: &schema})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newFile()
+	emitSchemaDef(f, m.Type("U"))
+	emitSchemaDef(f, m.Type("V"))
+	emitDecodeHelpers(f)
+	docs := typeDocs(t, mustRender(t, f))
+	const absent = `Its Kind field holds the "kind" discriminator, which the schema leaves absent or null for this variant.`
+	variants := 0
+	for _, u := range []*model.Type{m.Type("U"), m.Type("V")} {
+		for _, vi := range u.Variants {
+			variants++
+			doc, ok := docs[vi.TypeName]
+			if !ok {
+				t.Fatalf("no type %s in the output", vi.TypeName)
+			}
+			paras := strings.Split(strings.TrimSpace(doc), "\n\n")
+			if !strings.HasPrefix(paras[0], vi.TypeName+" is the ") {
+				t.Errorf("%s: doc does not start with its name and place: %q", vi.TypeName, doc)
+			}
+			want := ""
+			switch {
+			case vi.DiscValue != "":
+				want = `Its Kind field holds the "kind" discriminator, which the schema fixes at "` + vi.DiscValue + `".`
+			case vi.KeyLess && u.CatchAll >= 0:
+				want = absent
+			}
+			if want == "" {
+				if strings.Contains(doc, "discriminator, which") {
+					t.Errorf("%s: doc has a discriminator sentence: %q", vi.TypeName, doc)
+				}
+				continue
+			}
+			if len(paras) < 2 || strings.Join(strings.Fields(paras[1]), " ") != want {
+				t.Errorf("%s: second paragraph is not %q:\n%s", vi.TypeName, want, doc)
+			}
+		}
+	}
+	if variants != 6 {
+		t.Errorf("the unions have %d variants, want 6", variants)
+	}
+}
+
+// TestNegotiationDocNamesItsFields requires Negotiation's doc to keep its
+// first line and to name Request and Response, each as a word, so each field
+// counts as documented by its type's comment
+// (0056-PLAN-bring-the-docs-current-and-keep-them-current.md, phase 4b).
+func TestNegotiationDocNamesItsFields(t *testing.T) {
+	t.Parallel()
+	doc := typeDocs(t, rendered(t, renamedProtocol(t))["types_gen.go"])["Negotiation"]
+	if !strings.HasPrefix(doc, "Negotiation is ") {
+		t.Errorf("Negotiation's doc does not start with its name: %q", doc)
+	}
+	for _, field := range []string{"Request", "Response"} {
+		if !slices.Contains(strings.FieldsFunc(doc, func(r rune) bool { return !isIdentRune(r) }), field) {
+			t.Errorf("Negotiation's doc does not name %s as a word: %q", field, doc)
+		}
+	}
+}
+
+// isIdentRune reports whether r can be part of a Go identifier.
+func isIdentRune(r rune) bool {
+	return r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
 }

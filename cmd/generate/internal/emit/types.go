@@ -70,7 +70,12 @@ func typesFile(m *model.Model) *goFile {
 		f.line()
 		f.comment("Negotiation is what initialize agreed on a connection: the request the",
 			"client sent and the response the agent answered",
-			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1 and N1).")
+			"(0017-MADR-remediate-acp-v1-conformance-violations.md, G1 and N1).",
+			"",
+			// Each field is named as a word, so its type's comment documents it
+			// (0056-PLAN-bring-the-docs-current-and-keep-them-current.md, phase 4b).
+			"Request holds the request the client sent, and Response the response the",
+			"agent answered.")
 		f.add(typeDecl("Negotiation", &ast.StructType{Fields: fields(param("Request", id(mi.Req)), param("Response", id(mi.Resp)))}))
 		emitGates(f, m)
 	}
@@ -817,13 +822,16 @@ func orNil(def ast.Expr) ast.Expr {
 	return def
 }
 
-// emitInlineVariant emits the type the model gives a union variant without a
-// $ref, if any.
-func emitInlineVariant(f *goFile, tname, place string, in *model.Inline, dep *model.Deprecation) {
+// emitInlineVariant emits the type the model gives variant vi of union t when
+// vi has no $ref, if any; its doc names the place and, after its first
+// paragraph, the discriminator field discDoc describes.
+func emitInlineVariant(f *goFile, t *model.Type, vi *model.Variant, dep *model.Deprecation) {
+	in := vi.Inline
 	if in == nil {
 		return
 	}
-	f.comment(withNotice(typeDoc(tname, place, in.Doc), place, dep)...)
+	tname, place := vi.TypeName, schemaVariantPlace(t, vi)
+	f.comment(withNotice(afterFirstParagraph(typeDoc(tname, place, in.Doc), discDoc(t, vi)), place, dep)...)
 	switch in.Kind {
 	case model.InlineStruct:
 		emitStruct(f, tname, place, in.Fields, in.Members, in.KeepExtra, nil, in.Exempt, in.Validation)
@@ -835,6 +843,59 @@ func emitInlineVariant(f *goFile, tname, place string, in *model.Inline, dep *mo
 		f.add(typeDecl(tname, &ast.StructType{Fields: fields()}))
 		f.line()
 	}
+}
+
+// discDoc is the sentence that names the discriminator field of variant vi of
+// union t, so the field counts as documented by its type's comment
+// (0056-PLAN-bring-the-docs-current-and-keep-them-current.md, phase 4b). For a
+// variant with a discriminator value, held by a string field, it names the
+// field, the JSON key and the value the schema fixes; the field itself may
+// hold another value, as a variant decoded or built on its own keeps what it
+// is given. For a key-less variant of a union with a catch-all, the variant
+// the union decodes when the discriminator is absent or null, it names the
+// field and says the schema leaves it so. Nil for any other variant: a
+// catch-all's field has the schema's description, and a key-less variant of a
+// union without a catch-all may also be named by a present value.
+func discDoc(t *model.Type, vi *model.Variant) []string {
+	if t.DiscKey == "" || vi.Inline == nil {
+		return nil
+	}
+	key := strconv.Quote(t.DiscKey)
+	if vi.DiscValue != "" {
+		for i, kv := range vi.ConstPairs {
+			if kv[0] == t.DiscKey && kv[1] == vi.DiscValue && i < len(vi.ConstFields) {
+				return wrapDoc("Its " + vi.ConstFields[i] + " field holds the " + key +
+					" discriminator, which the schema fixes at " + strconv.Quote(vi.DiscValue) + ".")
+			}
+		}
+		return nil
+	}
+	if !vi.KeyLess || t.CatchAll < 0 {
+		return nil
+	}
+	for _, fld := range vi.Inline.Fields {
+		if fld.Key == t.DiscKey {
+			return wrapDoc("Its " + fld.Name + " field holds the " + key +
+				" discriminator, which the schema leaves absent or null for this variant.")
+		}
+	}
+	return nil
+}
+
+// afterFirstParagraph returns doc with extra as a paragraph of its own after
+// doc's first paragraph, so the line that names the type stays first. doc is
+// not changed.
+func afterFirstParagraph(doc, extra []string) []string {
+	if len(extra) == 0 {
+		return doc
+	}
+	end := slices.Index(doc, "")
+	if end < 0 {
+		end = len(doc)
+	}
+	out := append(slices.Clone(doc[:end]), "")
+	out = append(out, extra...)
+	return append(out, doc[end:]...)
 }
 
 // setVariant is u.<field> = &v; return nil.
@@ -1518,7 +1579,7 @@ func emitUnion(f *goFile, t *model.Type) {
 		if vi.Skip {
 			continue
 		}
-		emitInlineVariant(f, vi.TypeName, schemaVariantPlace(t, vi), vi.Inline, vi.Deprecation)
+		emitInlineVariant(f, t, vi, vi.Deprecation)
 		variants = append(variants, vi)
 	}
 

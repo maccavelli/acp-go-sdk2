@@ -513,6 +513,9 @@ func (v *AuthStatusUpdateNotification) validate(how validation) error {
 
 // InitialSessionConfigOptionBoolean is the "boolean" variant of the InitialSessionConfigOption schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "boolean".
+//
 // A boolean value ('type: "boolean"').
 type InitialSessionConfigOptionBoolean struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -1581,6 +1584,9 @@ func NewInitialSessionConfigOptionValueId(configId acp.SessionConfigId, value ac
 }
 
 // ToolCallContentSession is the "session" variant of the ToolCallContent schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "session".
 //
 // **UNSTABLE**
 //

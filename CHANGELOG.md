@@ -28,6 +28,11 @@
   The package comment's list of the connection's error sentinels now names `ErrShutdown`, `ErrHandlersRunning`,
   `ErrSendingMiddleware` and `ErrNotificationQueueOverflow`. Comments only: no code and no API changes. The generated
   types are the next phase's.
+- Documented the generated discriminator fields: each union variant type's comment now names the field that holds its
+  discriminator and the value the schema fixes it at, such as `Its Type field holds the "type" discriminator, which the
+  schema fixes at "terminal".` (69 types, 2 of them in `unstable`), and `IdleStateUpdateNone`'s says the schema leaves
+  `StopReason` absent or null. `Negotiation`'s comment names `Request` and `Response`. The generator writes them:
+  comments only, no API change.
 
 ## v1.36.0 — 2026-11-11
 

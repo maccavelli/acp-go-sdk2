@@ -738,6 +738,9 @@ func (v *AuthCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) er
 
 // AuthMethodTerminalInline is the "terminal" variant of the AuthMethod schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "terminal".
+//
 // Client runs the configured agent program as a separate interactive
 // process, without passing this method to 'authenticate'.
 type AuthMethodTerminalInline struct {
@@ -2703,6 +2706,9 @@ func (v *Content) validate(how validation) error {
 
 // ContentBlockText is the "text" variant of the ContentBlock schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "text".
+//
 // Text content. May be plain text or formatted with Markdown.
 //
 // All agents MUST support text content blocks in prompts.
@@ -2770,6 +2776,9 @@ func (v *ContentBlockText) validate(how validation) error {
 }
 
 // ContentBlockImage is the "image" variant of the ContentBlock schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "image".
 //
 // Images for visual context or analysis.
 //
@@ -2844,6 +2853,9 @@ func (v *ContentBlockImage) validate(how validation) error {
 
 // ContentBlockAudio is the "audio" variant of the ContentBlock schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "audio".
+//
 // Audio data for transcription or analysis.
 //
 // Requires the 'audio' prompt capability when included in prompts.
@@ -2912,6 +2924,9 @@ func (v *ContentBlockAudio) validate(how validation) error {
 }
 
 // ContentBlockResourceLink is the "resource_link" variant of the ContentBlock schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "resource_link".
 //
 // References to resources that the agent can access.
 //
@@ -2997,6 +3012,9 @@ func (v *ContentBlockResourceLink) validate(how validation) error {
 }
 
 // ContentBlockResource is the "resource" variant of the ContentBlock schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "resource".
 //
 // Complete resource contents embedded directly in the message.
 //
@@ -3473,6 +3491,9 @@ func (v *Cost) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // CreateElicitationForm is the "form" variant of the CreateElicitationRequest schema definition.
 //
+// Its Mode field holds the "mode" discriminator, which the schema fixes at
+// "form".
+//
 // Form-based elicitation where the client renders a form from the provided schema.
 type CreateElicitationForm struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -3597,6 +3618,9 @@ func (v *CreateElicitationForm) validate(how validation) error {
 }
 
 // CreateElicitationUrl is the "url" variant of the CreateElicitationRequest schema definition.
+//
+// Its Mode field holds the "mode" discriminator, which the schema fixes at
+// "url".
 //
 // URL-based elicitation where the client directs the user to a URL.
 type CreateElicitationUrl struct {
@@ -3992,6 +4016,9 @@ func (u *CreateElicitationRequest) validate(how validation) error {
 
 // CreateElicitationAccept is the "accept" variant of the CreateElicitationResponse schema definition.
 //
+// Its Action field holds the "action" discriminator, which the schema fixes at
+// "accept".
+//
 // The user accepted and provided content.
 type CreateElicitationAccept struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4053,6 +4080,9 @@ func (v *CreateElicitationAccept) validate(how validation) error {
 
 // CreateElicitationDecline is the "decline" variant of the CreateElicitationResponse schema definition.
 //
+// Its Action field holds the "action" discriminator, which the schema fixes at
+// "decline".
+//
 // The user declined the elicitation.
 type CreateElicitationDecline struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -4093,6 +4123,9 @@ func (v *CreateElicitationDecline) decodeKeys(b []byte, _ map[string]json.RawMes
 }
 
 // CreateElicitationCancel is the "cancel" variant of the CreateElicitationResponse schema definition.
+//
+// Its Action field holds the "action" discriminator, which the schema fixes at
+// "cancel".
 //
 // The elicitation was cancelled.
 type CreateElicitationCancel struct {
@@ -5143,6 +5176,9 @@ type ElicitationId string
 
 // ElicitationPropertySchemaString is the "string" variant of the ElicitationPropertySchema schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "string".
+//
 // String property (or single-select enum when 'enum'/'oneOf' is set).
 type ElicitationPropertySchemaString struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5249,6 +5285,9 @@ func (v *ElicitationPropertySchemaString) validate(how validation) error {
 
 // ElicitationPropertySchemaNumber is the "number" variant of the ElicitationPropertySchema schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "number".
+//
 // Number (floating-point) property.
 type ElicitationPropertySchemaNumber struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5315,6 +5354,9 @@ func (v *ElicitationPropertySchemaNumber) decodeKeys(b []byte, _ map[string]json
 }
 
 // ElicitationPropertySchemaInteger is the "integer" variant of the ElicitationPropertySchema schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "integer".
 //
 // Integer property.
 type ElicitationPropertySchemaInteger struct {
@@ -5383,6 +5425,9 @@ func (v *ElicitationPropertySchemaInteger) decodeKeys(b []byte, _ map[string]jso
 
 // ElicitationPropertySchemaBoolean is the "boolean" variant of the ElicitationPropertySchema schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "boolean".
+//
 // Boolean property.
 type ElicitationPropertySchemaBoolean struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -5441,6 +5486,9 @@ func (v *ElicitationPropertySchemaBoolean) decodeKeys(b []byte, _ map[string]jso
 }
 
 // ElicitationPropertySchemaArray is the "array" variant of the ElicitationPropertySchema schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "array".
 //
 // Multi-select array property.
 type ElicitationPropertySchemaArray struct {
@@ -6804,6 +6852,9 @@ func (v *HttpHeader) decodeKeys(b []byte, m map[string]json.RawMessage) error {
 
 // IdleStateUpdateEndTurn is the "end_turn" variant of the IdleStateUpdate schema definition.
 //
+// Its StopReason field holds the "stopReason" discriminator, which the schema
+// fixes at "end_turn".
+//
 // The work ended successfully.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
@@ -6851,6 +6902,9 @@ func (v *IdleStateUpdateEndTurn) decodeKeys(b []byte, _ map[string]json.RawMessa
 
 // IdleStateUpdateMaxTokens is the "max_tokens" variant of the IdleStateUpdate schema definition.
 //
+// Its StopReason field holds the "stopReason" discriminator, which the schema
+// fixes at "max_tokens".
+//
 // The work ended because the agent reached the maximum number of tokens.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
@@ -6897,6 +6951,9 @@ func (v *IdleStateUpdateMaxTokens) decodeKeys(b []byte, _ map[string]json.RawMes
 }
 
 // IdleStateUpdateMaxTurnRequests is the "max_turn_requests" variant of the IdleStateUpdate schema definition.
+//
+// Its StopReason field holds the "stopReason" discriminator, which the schema
+// fixes at "max_turn_requests".
 //
 // The work ended because the agent reached the maximum number of allowed
 // agent requests.
@@ -6946,6 +7003,9 @@ func (v *IdleStateUpdateMaxTurnRequests) decodeKeys(b []byte, _ map[string]json.
 
 // IdleStateUpdateRefusal is the "refusal" variant of the IdleStateUpdate schema definition.
 //
+// Its StopReason field holds the "stopReason" discriminator, which the schema
+// fixes at "refusal".
+//
 // The work ended because the agent refused to continue.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
@@ -6993,6 +7053,9 @@ func (v *IdleStateUpdateRefusal) decodeKeys(b []byte, _ map[string]json.RawMessa
 
 // IdleStateUpdateCancelled is the "cancelled" variant of the IdleStateUpdate schema definition.
 //
+// Its StopReason field holds the "stopReason" discriminator, which the schema
+// fixes at "cancelled".
+//
 // The work was cancelled.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
@@ -7039,6 +7102,9 @@ func (v *IdleStateUpdateCancelled) decodeKeys(b []byte, _ map[string]json.RawMes
 }
 
 // IdleStateUpdateError is the "error" variant of the IdleStateUpdate schema definition.
+//
+// Its StopReason field holds the "stopReason" discriminator, which the schema
+// fixes at "error".
 //
 // The work ended because something failed.
 //
@@ -7178,6 +7244,9 @@ func (v *IdleStateUpdateOther) decodeKeys(b []byte, m map[string]json.RawMessage
 }
 
 // IdleStateUpdateNone is the None variant of the IdleStateUpdate schema definition.
+//
+// Its StopReason field holds the "stopReason" discriminator, which the schema
+// leaves absent or null for this variant.
 //
 // No stop reason: 'stopReason' is omitted or 'null'.
 //
@@ -8486,6 +8555,9 @@ func (v *McpCapabilities) decodeKeys(b []byte, _ map[string]json.RawMessage) err
 
 // McpServerHttpInline is the "http" variant of the McpServer schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "http".
+//
 // # HTTP transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.http' is 'true'.
@@ -8546,6 +8618,9 @@ func (v *McpServerHttpInline) decodeKeys(b []byte, m map[string]json.RawMessage)
 
 // McpServerSseInline is the "sse" variant of the McpServer schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "sse".
+//
 // # SSE transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.sse' is 'true'.
@@ -8605,6 +8680,9 @@ func (v *McpServerSseInline) decodeKeys(b []byte, m map[string]json.RawMessage) 
 }
 
 // McpServerAcpInline is the "acp" variant of the McpServer schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "acp".
 //
 // **UNSTABLE**
 //
@@ -9124,6 +9202,9 @@ func (v *McpServerStdio) validate(how validation) error {
 type MessageId string
 
 // MultiSelectItemsString is the "string" variant of the MultiSelectItems schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "string".
 //
 // Multi-select string items with plain string values.
 type MultiSelectItemsString struct {
@@ -11508,6 +11589,9 @@ func (v *PlanUpdate) validate(how validation) error {
 
 // PlanUpdateContentItems is the "items" variant of the PlanUpdateContent schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "items".
+//
 // Structured plan entries.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
@@ -11592,6 +11676,9 @@ func (v *PlanUpdateContentItems) validate(how validation) error {
 
 // PlanUpdateContentFile is the "file" variant of the PlanUpdateContent schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "file".
+//
 // A URI pointing to a file containing the plan.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
@@ -11641,6 +11728,9 @@ func (v *PlanUpdateContentFile) decodeKeys(b []byte, m map[string]json.RawMessag
 }
 
 // PlanUpdateContentMarkdown is the "markdown" variant of the PlanUpdateContent schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "markdown".
 //
 // Raw markdown content for the plan.
 //
@@ -12594,6 +12684,9 @@ func (u *RequestId) validate(how validation) error {
 
 // RequestPermissionOutcomeCancelled is the "cancelled" variant of the RequestPermissionOutcome schema definition.
 //
+// Its Outcome field holds the "outcome" discriminator, which the schema fixes
+// at "cancelled".
+//
 // The prompt turn was cancelled before the user responded.
 //
 // When a client sends a 'session/cancel' notification to cancel an ongoing
@@ -12606,6 +12699,9 @@ type RequestPermissionOutcomeCancelled struct {
 }
 
 // RequestPermissionOutcomeSelected is the "selected" variant of the RequestPermissionOutcome schema definition.
+//
+// Its Outcome field holds the "outcome" discriminator, which the schema fixes
+// at "selected".
 //
 // The user selected one of the provided options.
 type RequestPermissionOutcomeSelected struct {
@@ -13624,6 +13720,9 @@ type SessionConfigId string
 
 // SessionConfigOptionSelect is the "select" variant of the SessionConfigOption schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "select".
+//
 // Single-value selector (dropdown).
 type SessionConfigOptionSelect struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -13696,6 +13795,9 @@ func (v *SessionConfigOptionSelect) validate(how validation) error {
 }
 
 // SessionConfigOptionBoolean is the "boolean" variant of the SessionConfigOption schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "boolean".
 //
 // Boolean on/off toggle.
 type SessionConfigOptionBoolean struct {
@@ -15082,6 +15184,9 @@ func (v *SessionSystemPromptOverrideCapabilities) decodeKeys(b []byte, _ map[str
 
 // SessionUpdateUserMessageChunk is the "user_message_chunk" variant of the SessionUpdate schema definition.
 //
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "user_message_chunk".
+//
 // A chunk of the user's message being streamed.
 type SessionUpdateUserMessageChunk struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -15147,6 +15252,9 @@ func (v *SessionUpdateUserMessageChunk) validate(how validation) error {
 }
 
 // SessionUpdateAgentMessageChunk is the "agent_message_chunk" variant of the SessionUpdate schema definition.
+//
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "agent_message_chunk".
 //
 // A chunk of the agent's response being streamed.
 type SessionUpdateAgentMessageChunk struct {
@@ -15214,6 +15322,9 @@ func (v *SessionUpdateAgentMessageChunk) validate(how validation) error {
 
 // SessionUpdateAgentThoughtChunk is the "agent_thought_chunk" variant of the SessionUpdate schema definition.
 //
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "agent_thought_chunk".
+//
 // A chunk of the agent's internal reasoning being streamed.
 type SessionUpdateAgentThoughtChunk struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -15279,6 +15390,9 @@ func (v *SessionUpdateAgentThoughtChunk) validate(how validation) error {
 }
 
 // SessionUpdateToolCall is the "tool_call" variant of the SessionUpdate schema definition.
+//
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "tool_call".
 //
 // Notification that a new tool call has been initiated.
 type SessionUpdateToolCall struct {
@@ -15414,6 +15528,9 @@ func (v *SessionUpdateToolCall) validate(how validation) error {
 }
 
 // SessionToolCallUpdate is the "tool_call_update" variant of the SessionUpdate schema definition.
+//
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "tool_call_update".
 //
 // Update on the status or results of a tool call.
 type SessionToolCallUpdate struct {
@@ -15552,6 +15669,9 @@ func (v *SessionToolCallUpdate) validate(how validation) error {
 
 // SessionUpdatePlan is the "plan" variant of the SessionUpdate schema definition.
 //
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "plan".
+//
 // The agent's execution plan for complex tasks.
 // See protocol docs: [Agent Plan](https://agentclientprotocol.com/protocol/v1/agent-plan)
 type SessionUpdatePlan struct {
@@ -15631,6 +15751,9 @@ func (v *SessionUpdatePlan) validate(how validation) error {
 
 // SessionPlanUpdate is the "plan_update" variant of the SessionUpdate schema definition.
 //
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "plan_update".
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -15698,6 +15821,9 @@ func (v *SessionPlanUpdate) validate(how validation) error {
 
 // SessionUpdatePlanRemoved is the "plan_removed" variant of the SessionUpdate schema definition.
 //
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "plan_removed".
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -15749,6 +15875,9 @@ func (v *SessionUpdatePlanRemoved) decodeKeys(b []byte, m map[string]json.RawMes
 }
 
 // SessionAvailableCommandsUpdate is the "available_commands_update" variant of the SessionUpdate schema definition.
+//
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "available_commands_update".
 //
 // Available commands are ready or have changed
 type SessionAvailableCommandsUpdate struct {
@@ -15825,6 +15954,9 @@ func (v *SessionAvailableCommandsUpdate) validate(how validation) error {
 
 // SessionCurrentModeUpdate is the "current_mode_update" variant of the SessionUpdate schema definition.
 //
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "current_mode_update".
+//
 // # The current mode of the session has changed
 //
 // See protocol docs: [Session Modes](https://agentclientprotocol.com/protocol/v1/session-modes)
@@ -15870,6 +16002,9 @@ func (v *SessionCurrentModeUpdate) decodeKeys(b []byte, m map[string]json.RawMes
 }
 
 // SessionConfigOptionUpdate is the "config_option_update" variant of the SessionUpdate schema definition.
+//
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "config_option_update".
 //
 // Session configuration options have been updated.
 type SessionConfigOptionUpdate struct {
@@ -15946,6 +16081,9 @@ func (v *SessionConfigOptionUpdate) validate(how validation) error {
 
 // SessionSessionInfoUpdate is the "session_info_update" variant of the SessionUpdate schema definition.
 //
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "session_info_update".
+//
 // Session metadata has been updated (title, timestamps, custom metadata)
 type SessionSessionInfoUpdate struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -15992,6 +16130,9 @@ func (v *SessionSessionInfoUpdate) decodeKeys(b []byte, _ map[string]json.RawMes
 }
 
 // SessionUsageUpdate is the "usage_update" variant of the SessionUpdate schema definition.
+//
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "usage_update".
 //
 // Context window and cost update for the session.
 type SessionUsageUpdate struct {
@@ -16042,6 +16183,9 @@ func (v *SessionUsageUpdate) decodeKeys(b []byte, m map[string]json.RawMessage) 
 }
 
 // SessionUpdateNotice is the "notice" variant of the SessionUpdate schema definition.
+//
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "notice".
 //
 // Information for the user that is not part of session history.
 //
@@ -16117,6 +16261,9 @@ func (v *SessionUpdateNotice) validate(how validation) error {
 
 // SessionCompactionUpdate is the "compaction_update" variant of the SessionUpdate schema definition.
 //
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "compaction_update".
+//
 // A context compaction has been created or updated.
 //
 // Agents MUST only send this update when the Client advertised
@@ -16189,6 +16336,9 @@ func (v *SessionCompactionUpdate) validate(how validation) error {
 
 // SessionUpdateCompactionSummaryChunk is the "compaction_summary_chunk" variant of the SessionUpdate schema definition.
 //
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "compaction_summary_chunk".
+//
 // A content block appended to a context compaction's retained summary.
 //
 // Agents MUST only send this update when the Client advertised
@@ -16248,6 +16398,9 @@ func (v *SessionUpdateCompactionSummaryChunk) validate(how validation) error {
 }
 
 // SessionSubagentUpdate is the "subagent_update" variant of the SessionUpdate schema definition.
+//
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "subagent_update".
 //
 // **UNSTABLE**
 //
@@ -16353,6 +16506,9 @@ func (v *SessionSubagentUpdate) validate(how validation) error {
 
 // SessionUpdateSessionMessage is the "session_message" variant of the SessionUpdate schema definition.
 //
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "session_message".
+//
 // **UNSTABLE**
 //
 // This capability is not part of the spec yet, and may be removed or changed at any point.
@@ -16435,6 +16591,9 @@ func (v *SessionUpdateSessionMessage) validate(how validation) error {
 }
 
 // SessionUpdateSessionMessageChunk is the "session_message_chunk" variant of the SessionUpdate schema definition.
+//
+// Its SessionUpdate field holds the "sessionUpdate" discriminator, which the
+// schema fixes at "session_message_chunk".
 //
 // **UNSTABLE**
 //
@@ -17352,6 +17511,9 @@ func (u *SessionUpdate) validate(how validation) error {
 
 // SetSessionConfigOptionBoolean is the "boolean" variant of the SetSessionConfigOptionRequest schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "boolean".
+//
 // A boolean value ('type: "boolean"').
 type SetSessionConfigOptionBoolean struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -17762,6 +17924,9 @@ func (v *SetSessionModeResponse) validate(how validation) error {
 
 // StateUpdateRunning is the "running" variant of the StateUpdate schema definition.
 //
+// Its State field holds the "state" discriminator, which the schema fixes at
+// "running".
+//
 // Foreground work is in progress.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
@@ -17802,6 +17967,9 @@ func (v *StateUpdateRunning) decodeKeys(b []byte, _ map[string]json.RawMessage) 
 }
 
 // StateUpdateIdle is the "idle" variant of the StateUpdate schema definition.
+//
+// Its State field holds the "state" discriminator, which the schema fixes at
+// "idle".
 //
 // The child is ready to process another prompt.
 //
@@ -17858,6 +18026,9 @@ func (v *StateUpdateIdle) decodeKeys(b []byte, _ map[string]json.RawMessage) err
 
 // StateUpdateRequiresAction is the "requires_action" variant of the StateUpdate schema definition.
 //
+// Its State field holds the "state" discriminator, which the schema fixes at
+// "requires_action".
+//
 // Foreground work is blocked on user action.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
@@ -17898,6 +18069,9 @@ func (v *StateUpdateRequiresAction) decodeKeys(b []byte, _ map[string]json.RawMe
 }
 
 // StateUpdateUnknown is the "unknown" variant of the StateUpdate schema definition.
+//
+// Its State field holds the "state" discriminator, which the schema fixes at
+// "unknown".
 //
 // The Agent cannot currently determine foreground activity.
 //
@@ -19401,6 +19575,9 @@ func (v *ToolCall) validate(how validation) error {
 
 // ToolCallContentContent is the "content" variant of the ToolCallContent schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "content".
+//
 // Standard content block (text, images, resources).
 type ToolCallContentContent struct {
 	// The _meta property is reserved by ACP to allow clients and agents to attach additional
@@ -19459,6 +19636,9 @@ func (v *ToolCallContentContent) validate(how validation) error {
 }
 
 // ToolCallContentDiff is the "diff" variant of the ToolCallContent schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "diff".
 //
 // File modification shown as a diff.
 type ToolCallContentDiff struct {
@@ -19530,6 +19710,9 @@ func (v *ToolCallContentDiff) validate(how validation) error {
 }
 
 // ToolCallContentTerminal is the "terminal" variant of the ToolCallContent schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "terminal".
 //
 // Embed a terminal created with 'terminal/create' by its id.
 //
@@ -21282,6 +21465,9 @@ type UnstableMcpRequestId string
 
 // UnstableMcpServerHttp is the "http" variant of the McpServer schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "http".
+//
 // # HTTP transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.http' is 'true'.
@@ -21346,6 +21532,9 @@ func (v *UnstableMcpServerHttp) decodeKeys(b []byte, m map[string]json.RawMessag
 
 // UnstableMcpServerSse is the "sse" variant of the McpServer schema definition.
 //
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "sse".
+//
 // # SSE transport configuration
 //
 // Only available when the Agent capabilities indicate 'mcp_capabilities.sse' is 'true'.
@@ -21409,6 +21598,9 @@ func (v *UnstableMcpServerSse) decodeKeys(b []byte, m map[string]json.RawMessage
 }
 
 // UnstableMcpServerAcpInline is the "acp" variant of the McpServer schema definition.
+//
+// Its Type field holds the "type" discriminator, which the schema fixes at
+// "acp".
 //
 // **UNSTABLE**
 //
@@ -22962,6 +23154,9 @@ func (v *UnstableNesSuggestContext) validate(how validation) error {
 
 // UnstableNesSuggestionEdit is the "edit" variant of the NesSuggestion schema definition.
 //
+// Its Kind field holds the "kind" discriminator, which the schema fixes at
+// "edit".
+//
 // A text edit suggestion.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
@@ -23028,6 +23223,9 @@ func (v *UnstableNesSuggestionEdit) decodeKeys(b []byte, m map[string]json.RawMe
 
 // UnstableNesSuggestionJump is the "jump" variant of the NesSuggestion schema definition.
 //
+// Its Kind field holds the "kind" discriminator, which the schema fixes at
+// "jump".
+//
 // A jump-to-location suggestion.
 //
 // Deprecated: this declaration comes from the unstable ACP schema; it stays
@@ -23079,6 +23277,9 @@ func (v *UnstableNesSuggestionJump) decodeKeys(b []byte, m map[string]json.RawMe
 }
 
 // UnstableNesSuggestionRename is the "rename" variant of the NesSuggestion schema definition.
+//
+// Its Kind field holds the "kind" discriminator, which the schema fixes at
+// "rename".
 //
 // A rename symbol suggestion.
 //
@@ -23133,6 +23334,9 @@ func (v *UnstableNesSuggestionRename) decodeKeys(b []byte, m map[string]json.Raw
 }
 
 // UnstableNesSuggestionSearchAndReplace is the "searchAndReplace" variant of the NesSuggestion schema definition.
+//
+// Its Kind field holds the "kind" discriminator, which the schema fixes at
+// "searchAndReplace".
 //
 // A search-and-replace suggestion.
 //
@@ -25580,6 +25784,9 @@ func orderedObject[V any](m map[string]V, order []string) (json.RawMessage, erro
 // Negotiation is what initialize agreed on a connection: the request the
 // client sent and the response the agent answered
 // (0017-MADR-remediate-acp-v1-conformance-violations.md, G1 and N1).
+//
+// Request holds the request the client sent, and Response the response the
+// agent answered.
 type Negotiation struct {
 	Request  InitializeRequest
 	Response InitializeResponse

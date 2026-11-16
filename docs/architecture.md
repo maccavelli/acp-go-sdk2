@@ -170,6 +170,14 @@ Every exported generated declaration has a doc comment
 (0019-PLAN-examples-docs-tests-tooling.md, I12):
 
 - a type, field or interface method has its schema description;
+- an inline variant type's comment also names, after its first paragraph, the
+  field that holds its union's discriminator, which the schema does not
+  describe: with the value the schema fixes it at, or, for the key-less
+  variant of a union with a catch-all, saying the schema leaves it absent or
+  null (0056-PLAN-bring-the-docs-current-and-keep-them-current.md, phase 4b).
+  The sentence states the schema: a variant decoded or built on its own holds
+  what it was given, and only the union's `MarshalJSON` writes a fixed value;
+- `Negotiation`'s comment names its `Request` and `Response` fields;
 - `Agent` and `Client` say which side implements them and what serves them;
 - an enum constant names its value, then gives the value's description;
 - a codec or `Validate` names where its type's schema sits: a definition, by

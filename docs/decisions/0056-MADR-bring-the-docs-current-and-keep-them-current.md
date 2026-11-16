@@ -157,6 +157,10 @@ update plan for acp-go-sdk2". Earlier the same day, asked to approve the three d
 yet", and this pair stayed `proposed` while the owner read it. The approval follows that reading and covers this
 repository's pair alone. From it, this record is `accepted` and its PLAN is `in-progress`.
 
+*Annotated 2026-11-16:* the PLAN is `complete`, every phase run and its completion criteria checked (the PLAN's
+execution record, "2026-11-16: the plan is complete"). This record stays `accepted`: its decisions are unchanged, and
+D5's docs step governs every later change.
+
 ### What each choice means here
 
 * **D1, the standard.** A defect is one of:
@@ -294,6 +298,15 @@ open.
    sentence on each variant type's comment, and a sentence in `Negotiation`'s comment that names `Request` and
    `Response`. It is generator text of its own, not schema text, and changes no API. The PLAN's phase 4b records
    what that means for its steps and its acceptance.
+
+   *Annotated 2026-11-15 again, by the owner's rulings relayed by the coordinator, after phase 4b stopped.* The 72 in
+   this question are not all discriminator fields: they are 69 discriminator fields whose variant has a value, 1 whose
+   variant has none (`IdleStateUpdateNone.StopReason`, which the schema types `null`), and `Negotiation`'s 2. For the
+   key-less field the owner chose "Extend the sentence to this case"; for the sentence's wording, "State what the
+   schema fixes", because a variant decoded or built on its own can hold another value, and only the union's encoder
+   writes the constant. So the sentence names the field, the JSON key and the value the schema fixes it at, or, for a
+   key-less variant of a union with a catch-all, says the schema leaves the field absent or null. The PLAN's phase 4b
+   records the rulings and the probe.
 6. **How `CHANGELOG.md` is routed and link-checked.** Today a root `CHANGELOG.md` is not docs-safe: a commit that
    changes it alone runs CI's six jobs, and `make pre-add-check` runs every Go check for it. `check_records.py` checks
    the links of a fixed list of unnumbered docs (`scripts/check_records.py:239`), which would not include it.

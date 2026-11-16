@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-11-15
+status: complete
+date: 2026-11-16
 associated-madr: "0056-MADR-bring-the-docs-current-and-keep-them-current.md"
 ---
 
@@ -461,9 +461,60 @@ cd ../.. && gofmt -w . && gofmt -w ./cmd/generate
      and these 2. After both changes the audit reports 0 in the generated files, and the acceptance, "0 undocumented
      generated names in scope", can be met. Before this amendment it could not, as phase 1's report said;
    * the files are the ones already listed, so no file joins the phase, and `make api` still reports no change.
+
+   *Annotated 2026-11-15, in phase 4b, from the model at `a437e28` (Execution record, "2026-11-15: phase 4b"):* the
+   72 are not all discriminator fields with a constant value. They are the members with no comment of their own: 69
+   discriminator fields whose variant has one constant value (67 in the root package, 19 of them `SessionUpdate`'s,
+   which the audit already counts as named by their type's comment, and 2 in `unstable`), 1 discriminator field whose
+   variant has no constant value (`IdleStateUpdateNone.StopReason`, `types_gen.go:7192`; the schema types it `null`),
+   and `Negotiation.Request` and `Response`. The sentence this step describes reaches the 69. The example sentence,
+   `Its Type field is always "terminal".`, would be a wrong statement: a variant decoded from a payload without its
+   discriminator, or decoded or built on its own, holds another value (the record gives the probe). The phase stopped
+   on the key-less field, which is the owner's to rule on; the wording is reported with it.
+
+   *Amended 2026-11-15 by the owner's rulings, relayed by the coordinator (Execution record, "2026-11-15: phase 4b",
+   "Resolution").* For the key-less field, the owner chose "Extend the sentence to this case". For the wording, the
+   owner chose "State what the schema fixes". The rejected wordings the owner was shown: one stating what the union
+   writes when encoded, and one naming the field without its value. So step 1 reads:
+   * a variant whose model gives it a discriminator value, held by a string field, gains the sentence `Its <Field> field
+     holds the "<key>" discriminator, which the schema fixes at "<value>".`, the field, the JSON key and the value
+     taken from the model for each variant. The example `Its Type field is always "terminal".` is not written anywhere:
+     a variant decoded on its own keeps the JSON's value, a zero value is empty, and only the union's encoder writes the
+     constant (the probe is in the record);
+   * a key-less variant of a union with a catch-all, which the union decodes when the discriminator is absent or null,
+     and whose struct holds the discriminator field, gains a sentence that names the field and says so, derived from
+     the model. Today that is `IdleStateUpdateNone` alone;
+   * any other variant gains no sentence, and a case that fits neither form stops the phase.
+
+   The counts: the sentence reaches 70 discriminator fields, 69 with a value and 1 key-less, 68 of them in the root
+   package and 2 in `unstable`; with `Negotiation`'s 2 that is the plan's 72. Of phase 4a's 53, 51 are reached by the
+   sentence (48 with a value in the root package, the key-less one, and the 2 in `unstable`) and 2 by `Negotiation`'s;
+   the other 19 of the 70 are `SessionUpdate`'s, which the audit already counted as named by their type's comment. The
+   acceptance arithmetic of the amendment above holds as written.
+
+   *Amended 2026-11-15 by the owner's ruling, relayed by the coordinator:* "\"which the schema leaves absent or
+   null\"". The key-less sentence is as built: `Its StopReason field holds the "stopReason" discriminator, which the
+   schema leaves absent or null for this variant.` The wording in the earlier ruling's option, "which is absent or null
+   for this variant", was the coordinator's example; phase 4b's probe showed it false of a variant built by hand, which
+   the union's encoder writes with whatever its field holds, and the owner confirmed the built wording. Rejected: the
+   earlier wording; a sentence saying how the union recognises the variant.
 2. Add an engine case or change one so that the new comment is covered, and run the engine cases with their `-update`
    flag (`cmd/generate/engine_test.go:22`), in the one package `cmd/generate`: `go test . -run TestEngineCases -update`.
    Then read the golden diff: only comment lines change.
+
+   *Annotated 2026-11-15, in phase 4b (Execution record, "2026-11-15: phase 4b, run", "Deviation"):* an engine case
+   cannot cover a doc comment. Its goldens are `want.api`, the generated package's exported API as
+   `enginetest.API` lists it, and `want.deprecated`, the deprecation notices (`cmd/generate/engine_test.go:105`-`:121`);
+   neither holds a type's comment. The `-update` run changed no golden. The new comments are covered by three tests in
+   `cmd/generate/internal/emit/docs_test.go` and, for the real schema, by `TestGeneratedFilesUpToDate`. This is a
+   deviation the owner has not ruled on.
+
+   *Amended 2026-11-15 by the owner's ruling, relayed by the coordinator:* "Accept the emitter tests". Step 2 rested on
+   a wrong premise: the engine goldens hold the exported API and the deprecation notices, not doc comments
+   (`cmd/generate/engine_test.go:105`-`:121`). Its coverage is `TestDiscDoc`, `TestVariantDocsNameTheDiscriminator` and
+   `TestNegotiationDocNamesItsFields` (`cmd/generate/internal/emit/docs_test.go:144`, `:204`, `:270`), with
+   `TestGeneratedFilesUpToDate` for the real schema. Rejected options the owner was shown: adding doc comments to the
+   engine goldens; accepting but leaving the plan open for a harness record.
 3. Regenerate as above. Phase 4a's comments-only script, run over the `*_gen.go` diff, confirms that only comment
    lines changed.
 4. Run phase 4a's program: the generated packages are at 0 in scope.
@@ -1863,3 +1914,345 @@ numbers in this entry are those of the staged files.
   only: no code line, test or generated file changed, and no tag was cut.
 * **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard. The plan pauses
   until the coordinator briefs phase 4b.
+
+### 2026-11-15: phase 4b
+
+Provenance: run by a strongest-tier model at high effort, as the phase's row prices it, on the coordinator's brief.
+Line numbers in this entry are those of the tree at `a437e28`, which this entry does not change outside the records.
+
+**Stopped before step 1's change was made in the tree.** One discriminator field has no constant value, so the
+sentence step 1 describes cannot name one, and the brief and the plan both say not to invent one. No `.go` file, golden
+or generated file changed. What follows is the evidence and the resolutions, for the owner.
+
+* **Approval.** The owner, 2026-11-15: "Run 5b, 4a and 4b through". The coordinator committed phase 4a as `a437e28`
+  and briefed this phase alone. A deviation still stops the phase and goes to the owner.
+* **Base.** `git rev-parse HEAD`: `a437e28`, on `main`; `git status --short` was empty.
+* **The audit before.** Phase 4a's program (`<scratch>/undoc.go`, copied unchanged), without `-hand`, on the tree:
+  exit 1, "undocumented: hand-written 0, generated 53". The 53 are 49 discriminator fields in `types_gen.go`,
+  `Negotiation.Request` and `Response` (`types_gen.go:25584`-`:25585`), and `InitialSessionConfigOptionBoolean.Type`
+  and `ToolCallContentSession.Type` (`unstable/unstable_gen.go:526`, `:1599`). Under `-v`, 19 more generated fields
+  with no comment of their own are counted as named by their type's comment: the `SessionUpdate` field of each of
+  `SessionUpdate`'s 19 variants, whose type comments name the union `SessionUpdate`, which is the field's name too.
+* **The model.** A scratch test, in a scratch clone only, built the model as `cmd/generate/main.go:72`-`:77` and
+  `:153`-`:185` do and printed, for each union, its `DiscKey` and `DiscField`, and for each variant its `DiscValue`,
+  `ConstPairs`, `ConstFields`, `KeyLess` and catch-all mark.
+  * 69 variants have exactly one constant, under the union's discriminator key, held by a string field of the variant:
+    67 in the root package (`AuthMethod` 1, `ContentBlock` 5, `CreateElicitationRequest` 2,
+    `CreateElicitationResponse` 3, `ElicitationPropertySchema` 5, `IdleStateUpdate` 6, `McpServer` 3,
+    `MultiSelectItems` 1, `PlanUpdateContent` 3, `RequestPermissionOutcome` 2, `SessionConfigOption` 2, `SessionUpdate`
+    19, `SetSessionConfigOptionRequest` 1, `StateUpdate` 4, `ToolCallContent` 3, `UnstableMcpServer` 3,
+    `UnstableNesSuggestion` 4) and 2 in `unstable` (`ToolCallContent`'s `session`, `InitialSessionConfigOption`'s
+    `boolean`). Each is an inline variant, emitted by `emitInlineVariant` (`cmd/generate/internal/emit/types.go:822`).
+    No variant has more than one constant.
+  * The catch-all variants (`…Other`) have no constant, and their discriminator fields carry the schema's description.
+    The key-less variants `AuthMethodAgent`, `McpServerStdio`, `TitledMultiSelectItems`,
+    `SetSessionConfigOptionValueId` and `InitialSessionConfigOptionValueId` have no field for the discriminator.
+  * **One key-less variant has the field and no constant:** `IdleStateUpdateNone` (`types_gen.go:7180`-`:7197`), whose
+    `StopReason` field (`:7192`, `json.RawMessage`) the schema types `null` (`schema/schema.unstable.json:6068`-`:6074`,
+    `"stopReason": {"type": "null"}`). Its type comment says "No stop reason: 'stopReason' is omitted or 'null'.", which
+    names the JSON key, not the word `StopReason`. It is one of phase 1's 49 (the report's D2 counts it among the 7
+    `StopReason` fields).
+* **The counts reconciled.** The plan's 72 (70 root, 2 `unstable`) are the generated members with no comment of their
+  own, the audit's "no-own-cmt" column (70 in `acp`, 2 in `unstable`): 69 discriminator fields with a constant, 1
+  without (`IdleStateUpdateNone.StopReason`), and `Negotiation`'s 2. Phase 4a's 53 are the same 72 less the 19
+  `SessionUpdate` fields the word match already counts: 48 with a constant, `IdleStateUpdateNone.StopReason`,
+  `Negotiation`'s 2, and the 2 in `unstable`. Step 1 is annotated with this.
+* **A prototype, in a scratch clone only.** The emitter change as step 1 and its amendment describe it: a sentence
+  after the first paragraph of each variant type whose model gives a constant, naming the field and the value, and a
+  sentence in `Negotiation`'s comment naming `Request` and `Response`. Regenerated with the plan's two commands in the
+  clone: exit 0. The `*_gen.go` diff, through phase 4a's `commentsonly.py`: "208 added or removed lines, 0 not blank
+  or comment", exit 0 (that script was not seen to fail again in this phase; phase 4a's record holds its planted
+  failure). 69 sentences added. Phase 4a's program on the clone: exit 1, "undocumented: hand-written 0, generated 1",
+  the one being `IdleStateUpdateNone.StopReason`. So step 1 as written leaves the acceptance, 0, unmet by one field.
+* **The example sentence.** Step 1's example, `Its Type field is always "terminal".`, would be contradicted by the
+  code. A scratch test in a scratch clone (`go test . -run TestZZFit`), exit 0, printed:
+  `ContentBlock from {"text":"hi"}: err=<nil> Text=true` and `Text.Type=""` (a payload without the discriminator
+  is placed by its keys, `fitBody`, `cmd/generate/internal/emit/types.go:1134`, and the field stays empty);
+  `ContentBlockText from type image: err=<nil> Type="image"` (the variant decoded on its own does not check it);
+  `ContentBlockText{} marshalled alone: {"text":"hi","type":""}`; `ContentBlock{Text} marshalled:
+  {"text":"hi","type":"text"}` (the union's `MarshalJSON` sets the constant on a copy, `types.go:1192`-`:1198`). The
+  prototype's wording states the schema's value instead, for example `Its Type field holds the "type" discriminator,
+  which the schema fixes at "terminal".` It is reported with the stop, since the owner's ruling quoted the example.
+* **Deviation, for the owner.** `IdleStateUpdateNone.StopReason` has no constant discriminator value, so step 1's
+  sentence cannot name one. Resolutions that leave the tree correct, recommended first:
+  1. Extend step 1 to a key-less variant whose struct holds the discriminator field (`KeyLess` in the model,
+     `cmd/generate/internal/model/model.go:230`, and a field whose key is the union's `DiscKey`): its type comment gains
+     one sentence naming the field and saying the discriminator is absent or null for this variant, for example `Its
+     StopReason field holds the "stopReason" discriminator, which is absent or null for this variant.` The schema
+     supports it (`"type": "null"`, not required, and the variant's own description), and so does the decoder, which
+     takes the key-less branch when the discriminator is absent or null (`types.go:1036`-`:1038`, `:1080`-`:1083`). Cost:
+     one more branch in the same emitter function and its test, one more engine case or golden line, one more
+     generated comment; the files are already the phase's, `make api` still reports no change. Today it changes this
+     one type.
+  2. A comment on the field itself. The owner rejected "Comment on each field" for the discriminator fields. Its cost
+     is also a re-padding: the field sits in a gofmt-aligned block (`types_gen.go:7191`-`:7192`), so a comment line
+     between `Meta` and `StopReason` would change their alignment, a code line in the diff, which the comments-only
+     acceptance refuses.
+  3. Count the type comment's "'stopReason'" as naming the field. This is the reading "Count the existing prose" that
+     the owner rejected for `Negotiation`. No code change; it changes the audit's rule, not the tree.
+  4. Carry the field with a reason. Phase 4b then ends at 1, not 0, and this PLAN cannot be `complete` by its own
+     acceptance until a later amendment fixes it.
+
+  Doing nothing leaves phase 4b unrun: 53 generated members stay undocumented, `docs/architecture.md:172` stays open,
+  and this PLAN stays `in-progress`.
+* **Docs step.** None changed; the phase changed no code. `docs/architecture.md:172`, left open by phase 4a, stays
+  open until the generator change lands.
+* **Close-out.** Not checked: the PLAN is not complete, as phase 4b is not done. Its status stays `in-progress`.
+* **Not verified.** The prototype was not run through the generator's tests or `make pre-add-check`: it is evidence
+  for the owner, not the phase's change. No planted break was run for a new test, as no test was written in the tree.
+* **Verification of this entry.** `python3 -B scripts/check_records.py --check-all`, `python3 -B
+  scripts/check_disclosure.py` and offline `markdownlint-cli2` v0.23.2, after the last record edit, each output to a
+  scratch file and its exit status taken before it was read: `check_records.py` exit 0, no output;
+  `check_disclosure.py` exit 0, "840 tracked file(s), 0 finding(s)"; markdownlint exit 0, "Linting: 57 files",
+  "Summary: 0 issues in 0 files". `make pre-add-check` and `make api` were not run: no `.go` file changed.
+* **Files.** This PLAN (step 1's annotation and this entry) and `docs/README.md` (this PLAN's row text). No `.go` file,
+  golden, generated file or `CHANGELOG.md` changed.
+* **Commit.** Staged, not committed. The phase waits for the owner's ruling.
+* **Resolution, 2026-11-15.** The owner's rulings, relayed by the coordinator: for `IdleStateUpdateNone.StopReason`,
+  "Extend the sentence to this case" (resolution 1 above); for the wording of the sentence on a variant with a value,
+  "State what the schema fixes". The rejected wordings the owner was shown: one stating what the union writes when
+  encoded, and one naming the field without its value. Step 1 carries both as a dated amendment, and the MADR's
+  question 5 a dated annotation. The phase then ran ("2026-11-15: phase 4b, run", below).
+
+### 2026-11-15: phase 4b, run
+
+Provenance: run by a strongest-tier model at high effort, as the phase's row prices it, on the coordinator's brief and
+its second message, which relayed the owner's two rulings. Line numbers in this entry are those of the staged files.
+
+* **Approval.** The owner, 2026-11-15: "Run 5b, 4a and 4b through". After the stop above, the owner ruled "Extend the
+  sentence to this case" and "State what the schema fixes", relayed by the coordinator, who said the phase may run.
+* **Base.** `a437e28`, on `main`, with the stop's records staged and nothing else changed.
+* **The probe of each shape, before the sentences were settled.** A scratch test on a scratch clone of `a437e28`
+  (`go test . ./unstable -run 'TestZZShapes|TestZZUnstableShapes'`), exit 0. What the generated decoder and encoder do
+  with the discriminator field:
+  * a variant with a value, `AuthMethodTerminalInline`: decoded through `AuthMethod` from `"type":"terminal"`, `Type`
+    is `"terminal"`; a payload without `type` decodes as the key-less `Agent`; decoded on its own from `"type":"other"`,
+    `Type` is `"other"`; a zero value encodes `"type":""`; `AuthMethod{Terminal: …}` encodes `"type":"terminal"`;
+  * one of `SessionUpdate`'s, `SessionUpdateUserMessageChunk`: through the union, `SessionUpdate` is
+    `"user_message_chunk"`; on its own from `"plan"`, `"plan"`; a zero value encodes `"sessionUpdate":""`; through
+    the union, `"user_message_chunk"`;
+  * the key-less variant, `IdleStateUpdateNone`: `IdleStateUpdate` decodes `{}` and `{"stopReason":null}` into `None`
+    with `StopReason` empty, `"end_turn"` into `EndTurn`, `"bogus"` into the catch-all `Other`, and fails on a number;
+    decoded on its own from `"end_turn"`, `StopReason` holds `"end_turn"`; a zero value encodes `{}`;
+    `IdleStateUpdate{None: …}` with `StopReason` set to `"end_turn"` encodes `{"stopReason":"end_turn"}`;
+  * in `unstable`, `ToolCallContentSession`: acp's `ToolCallContent` keeps `{"type":"session",…}` in `Unknown`, and
+    `DecodeToolCallContentSession` gives `Type` `"session"` and refuses a payload whose `type` is not `"session"`;
+    decoded on its own from `"diff"`, `"diff"`; a zero value encodes `"type":""`. `InitialSessionConfigOptionBoolean`,
+    through its union, `"boolean"` both ways.
+
+  So a sentence that says what the field holds would be contradicted by the code for every shape; one that says what
+  the schema fixes is not. For the key-less variant the same holds: the union decodes into it only when the
+  discriminator is absent or null, but the variant decoded on its own, and the union's encoder, keep whatever the
+  field holds. The key-less sentence therefore states the schema too, as the owner's wording ruling does for the
+  others: `Its StopReason field holds the "stopReason" discriminator, which the schema leaves absent or null for this
+  variant.` That is the coordinator's example with "the schema leaves" in place of "is"; the coordinator may want the
+  owner to see it. *Annotated 2026-11-16:* the owner confirmed this wording on 2026-11-15 (step 1's last amendment).
+* **Step 1: the emitter.** `cmd/generate/internal/emit/types.go`:
+  * `discDoc` (`:859`): from the model, the sentence for a variant with a discriminator value whose `ConstPairs` entry
+    under the union's `DiscKey` has a string field in `ConstFields` (field, key and value from the model), or for a
+    `KeyLess` variant of a union with a catch-all (`CatchAll >= 0`) whose inline struct has a field keyed by `DiscKey`;
+    nil otherwise. A union without a catch-all is left out because a present value equal to a key-less variant's title
+    also decodes into it (`types.go:1068`-`:1074`), so "absent or null" would not hold there.
+  * `afterFirstParagraph` (`:888`): puts the sentence as a paragraph of its own after the doc's first paragraph, so the
+    line that names the type stays first.
+  * `emitInlineVariant` (`:828`) now takes the union and the variant, and both callers pass them (`types.go:1582`,
+    `unstable.go:131`).
+  * `Negotiation`'s comment (`:71`-`:78`) gains a second paragraph: "Request holds the request the client sent, and
+    Response the response the agent answered."
+
+  No exported name was added. Every new function has a doc comment.
+* **Tests.** `cmd/generate/internal/emit/docs_test.go`:
+  * `TestDiscDoc` (`:144`): nine cases from model literals, among them a value after another constant, a value no
+    string field holds, a `$ref` variant, key-less with and without a catch-all, key-less without the field, the
+    catch-all and a union without a discriminator.
+  * `TestVariantDocsNameTheDiscriminator` (`:204`): renders a union with two variants with a value, a catch-all and a
+    key-less variant, and a union without a catch-all, and reads each variant type's doc: its first paragraph names the
+    type, and its second is the sentence, or there is none.
+  * `TestNegotiationDocNamesItsFields` (`:270`): `Negotiation`'s doc starts with its name and names `Request` and
+    `Response` as words.
+* **Planted breaks**, each on a fresh copy of a scratch clone that held the change (`<scratch>/runplants.py`), the
+  tree untouched:
+  * the key-less branch removed: `TestDiscDoc` and `TestVariantDocsNameTheDiscriminator` failed (`UNone: second
+    paragraph is not "Its Kind field holds the \"kind\" discriminator, which the schema leaves absent or null for this
+    variant."`); regenerated, the audit exited 1, `UNDOCUMENTED gen field IdleStateUpdateNone.StopReason`,
+    "generated 1";
+  * the sentence dropped for every variant with a value: both tests failed (`UA`, `UB`, `VC`); regenerated, the audit
+    exited 1, "generated 50";
+  * the wrong field named (the JSON key for the Go field): both tests failed, `discDoc = "Its kind field holds …"`;
+  * the wrong value named: both tests failed, `… fixes at \"\".`;
+  * the sentence placed before the comment's first line: `TestVariantDocsNameTheDiscriminator` failed (`UA: doc does
+    not start with its name and place`), and, regenerated, the root's `TestExportedTypeDocsStartWithName` exited 1,
+    `types_gen.go:746:6: AuthMethodTerminalInline's doc starts "Its Type field holds the \"type\" discriminator, which
+    the schema fixes at"`, one line per variant type;
+  * the sentence given to a key-less variant of a union without a catch-all: both tests failed (`VPlain: doc has a
+    discriminator sentence`);
+  * `Negotiation`'s sentence replaced by one that names neither field: `TestNegotiationDocNamesItsFields` failed;
+    regenerated, the audit exited 1, `Negotiation.Request` and `Negotiation.Response`, "generated 2".
+* **Step 2: the engine cases.** `go test . -run TestEngineCases -update`, in `cmd/generate`: exit 0, and
+  `git status --short -- cmd/generate/testdata` printed nothing: no golden changed.
+* **Deviation (2026-11-15), for the owner.** Step 2 assumed the goldens would show the comment. They do not: an engine
+  case's goldens are `want.api`, the exported API as `enginetest.API` lists it, and `want.deprecated`, the deprecation
+  notices (`cmd/generate/engine_test.go:105`-`:121`); neither holds a type's doc comment. No engine case can cover the
+  new sentence as the step says. Pre-existing: the harness has worked this way since 0011's engine tests.
+  * What was done: the coverage is in the emitter's own tests, `cmd/generate/internal/emit/docs_test.go`, a file in the
+    phase's list ("its tests"), and for the real schema in `TestGeneratedFilesUpToDate`; the `-update` run was made as
+    the step says and changed nothing. Step 2 carries a dated annotation.
+  * Resolutions, recommended first: (1) accept this coverage; no further cost. (2) Add a doc-comment golden to the
+    engine harness (a `want.doc` listing per case), which changes `cmd/generate/engine_test.go` and
+    `cmd/generate/internal/enginetest/`, files outside the phase's list, and adds a golden kind every case update
+    rewrites; a larger change, and nearer the "new check" the MADR's D3 rules out.
+  * Doing nothing: the tree is correct and covered by (1); what is open is only the owner's acceptance. I proceeded
+    past this point instead of stopping, because every step after it is the same under either resolution; the PLAN is
+    left `in-progress` until the owner rules.
+  * *Resolved 2026-11-15 by the owner's ruling, relayed by the coordinator:* "Accept the emitter tests", resolution
+    (1). Step 2 carries a dated amendment. Rejected options the owner was shown: adding doc comments to the engine
+    goldens; accepting but leaving the plan open for a harness record.
+* **Step 3: regeneration**, in the tree, by the plan's two commands: `cd cmd/generate && env -u GOPATH -u GOMODCACHE go
+  run .`, exit 0, no output; `gofmt -w . && gofmt -w ./cmd/generate`, exit 0. `git status` showed only `types_gen.go`
+  and `unstable/unstable_gen.go` changed among generated files; `agent_gen.go`, `client_gen.go`, `constants_gen.go`
+  and `helpers_gen.go` are unchanged. `make version` was not run; `schema/version` is unchanged.
+* **Comments only.** Phase 4a's `commentsonly.py`:
+  * over `git diff -U0 -- '*_gen.go'`: "213 added or removed lines, 0 not blank or comment", exit 0. Seen to fail on a
+    scratch copy with one code line changed (`"AuthMethod: no variant set"` to `"… no variant was set"` in
+    `types_gen.go`): exit 1, `CODE LINE b/types_gen.go: -	return nil, errors.New("AuthMethod: no variant set")` and
+    the `+` line, "215 added or removed lines, 2 not blank or comment";
+  * over `git diff -U0 -- cmd/generate/testdata`: "0 added or removed lines", exit 0. Seen to fail on a scratch copy
+    with one `want.api` line changed: exit 1, `CODE LINE b/cmd/generate/testdata/engine/accept-catch-all-variant.txtar:
+    +type Agent interface{} // planted`.
+* **Step 4: the audit.** Phase 4a's program, without `-hand`, on the tree: before, exit 1, "hand-written 0, generated
+  53"; after, exit 0, "undocumented: hand-written 0, generated 0". In `acp` generated, members named by their type's
+  comment went from 19 to 70; in `unstable`, from 0 to 2.
+* **The counts.** 70 variant types gained the sentence: 69 with a value (67 in the root package, 19 of them
+  `SessionUpdate`'s; 2 in `unstable`) and `IdleStateUpdateNone`. Each documents one field. With `Negotiation`'s 2,
+  72 fields are named by their type's comment, the plan's 72. Of phase 4a's 53, the sentence reached 51 and
+  `Negotiation`'s 2; the 19 `SessionUpdate` fields were already counted.
+* **Step 5: the changelog.** One line under `Unreleased`, `CHANGELOG.md:31`-`:35`.
+* **Docs step.** `docs/architecture.md:172`, left open by phase 4a, is now true: `:173`-`:180` add that an inline
+  variant type's comment names its discriminator field, with the value the schema fixes or, for the key-less variant
+  of a union with a catch-all, that the schema leaves it absent or null, that the sentence states the schema, and that
+  `Negotiation`'s comment names `Request` and `Response`. Searched `README.md`, `docs/architecture.md`, `AGENTS.md`,
+  `RELEASING.md` and `tools/README.md` for doc comments, discriminators and `Negotiation`: `README.md:237`-`:374`
+  describe how unions decode and encode, not their comments, and hold; `docs/architecture.md:336`-`:338` (DocNotes
+  after a blank line) still holds; nothing else describes generated comments.
+* **The MADR.** Question 5 carries a dated annotation of the two rulings and of what the 72 are.
+* **Verification.** Each output went to a scratch file and its exit status was taken before it was read. Times are
+  local.
+  * `gofmt -l` on the five changed `.go` files: prints nothing, exit 0.
+  * `make api`, 21:19:59 to 21:20:10, after the last `.go` edit: exit 0, "against v1.36.0: 0 incompatible, 0
+    compatible"; `unstable` and `remote` report 0 incompatible and are not gated.
+  * `run-heavy -- make pre-add-check FILES="<the five .go files, docs/architecture.md, CHANGELOG.md>"`, on this Mac,
+    21:20:15 to 21:22:44, after the last change to a file that is not a record: exit 0, waited 0 s, ran 149 s.
+    `go-precheck`: "5 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached), tidy,
+    govulncheck." The gate runs `go test -race -shuffle=on ./...` in the root and in `cmd/generate`
+    (`scripts/go-precheck.sh:134`, `:146`-`:147`) and prints no test names. `go test -list` shows
+    `TestGeneratedFilesUpToDate` and `TestEngineCases` in package `cmd/generate`, the three new tests in
+    `cmd/generate/internal/emit` and `TestExportedTypeDocsStartWithName` in the root, all inside what the gate tested.
+    Run again by name afterwards, single packages, `-v`: each `--- PASS`, `TestEngineCases` with its 248 cases.
+  * The four one-off audits, on the tree after the last record edit: phase 3's inventory (phase 6's copy, with its
+    `judged.json`), exit 0, "# 254 items, 0 not described", its two `EXCLUDED` lines as before; phase 5a's changelog
+    check, exit 0, "0 finding(s); tag v1.36.0, tag date 2026-11-11"; phase 6's index check, exit 0, no output; phase
+    4a's program, exit 0, "hand-written 0, generated 0". Each was seen to fail in its own phase on a planted break,
+    recorded there; this phase saw phase 4a's fail again (the plants above).
+  * `python3 -B scripts/check_records.py --check-all`, `python3 -B scripts/check_disclosure.py` and offline
+    `markdownlint-cli2` v0.23.2, after the last record edit:
+    `check_records.py` exit 0, no output; `check_disclosure.py` exit 0, "840 tracked file(s), 0 finding(s)";
+    markdownlint exit 0, "Linting: 57 files", "Summary: 0 issues in 0 files".
+* **Close-out: the PLAN's completion criteria, on the staged tree.**
+  * Every defect of phase 1's report fixed or carried: W1, W4, W5 and W6 by phase 2, checked again here (`grep -n
+    'output\.go' docs/architecture.md` exit 1; `README.md:97`; `docs/architecture.md:1254`, seven, and
+    `agentproc/stderr_test.go` has 7 tests; `:1420` and `:1429`, 64 and seventeen, and `remote` has 64 tests, 17 in
+    `ws_test.go`); W7 by phase 4a (`doc.go:39`-`:40`). M1, M2, M3a to M3c, M4 and M9 to M13 by phase 3, with the two
+    flags the owner added by phase 6 (the inventory audit at 0). M6 and M7 by phase 5a (the changelog check at 0;
+    `RELEASING.md`). D1 by phase 4a and D2 by this phase (the audit at 0). S1 and S4 by phase 6 (the index check at 0).
+    W2 and M5 were refuted. No row is carried.
+  * The one-off audits of phases 3, 4a, 5a and 6 report no finding on the final tree (above). None is committed.
+  * `make check-records`, `make markdownlint` and `make disclosure-check` pass (the scripts they run, above).
+    `make pre-add-check` passed for each phase that changed a file that is not docs-safe: phases 2, 3, 5a, 6, 5b and 4a
+    (their entries) and this one; phase 1 changed docs-safe files alone.
+  * `make api` reports no change against `v1.36.0`.
+  * Phase 4b's acceptance: 0 undocumented generated names; the generated diff is comments only; generator and output
+    are staged together.
+
+  Every criterion is met. The PLAN is left `in-progress` all the same: the deviation in step 2 is not yet the owner's
+  ruling, and this record does not mark a PLAN complete over an open deviation. When the owner accepts resolution 1,
+  the frontmatter becomes `status: complete` and the `docs/README.md` row says so, with no other change.
+
+  *Annotated 2026-11-16:* the owner accepted resolution 1 on 2026-11-15, and the PLAN is `complete` ("2026-11-16: the
+  plan is complete", below).
+* **Not verified.**
+  * Full CI on the push: the coordinator's to run.
+  * Whether a reader of pkg.go.dev reads "the schema fixes at" as the owner meant: the sentence was checked against the
+    code by the probe, not by a reader.
+  * The key-less sentence's "the schema leaves" in place of the coordinator's example "is": chosen from the probe,
+    not ruled by the owner. *Annotated 2026-11-16:* the owner confirmed it on 2026-11-15 (step 1's last amendment).
+* **Files.** `cmd/generate/internal/emit/types.go`, `cmd/generate/internal/emit/unstable.go`,
+  `cmd/generate/internal/emit/docs_test.go`; regenerated `types_gen.go` and `unstable/unstable_gen.go`;
+  `docs/architecture.md`; `CHANGELOG.md` (one line); the MADR (question 5's annotation); `docs/README.md` (the MADR's
+  and this PLAN's rows); this PLAN (step 1's amendment, step 2's annotation, the stop's resolution, this entry). No
+  golden changed. No tag was cut.
+* **Commit.** Staged, not committed. The coordinator commits and pushes after the disclosure guard.
+
+### 2026-11-16: the plan is complete
+
+Provenance: written by a strongest-tier model at high effort, on the coordinator's message relaying the owner's two
+rulings of 2026-11-15 on phase 4b. The entry is dated 2026-11-16, the date `date +%F` printed when the status was set
+and the closing checks ran; the rulings it rests on are dated 2026-11-15 where they are recorded.
+
+* **The rulings.** "Accept the emitter tests" (step 2's amendment; the run entry's deviation, resolved) and
+  "\"which the schema leaves absent or null\"" (step 1's last amendment), each the owner's ruling, relayed by the
+  coordinator. Phase 4b's code was accepted by the coordinator as staged.
+* **Status.** This PLAN's frontmatter is `status: complete`, `date: 2026-11-16`, and its `docs/README.md` row says so.
+  The MADR stays `accepted`, with a dated annotation under its approval; its row notes the PLAN's completion.
+* **The completion criteria (Verification, above, and phase 6's acceptance), with their evidence.**
+  * Phase 1's report lists every defect, each fixed by its phase or carried with a reason: every row is fixed, none is
+    carried, W2 and M5 refuted ("2026-11-15: phase 4b, run", "Close-out", which re-checks the wrong rows on the tree).
+  * The one-off audits of phases 3, 4a, 5a and 6 print no finding on the final tree, and none is committed: run again
+    after this entry's last edit (below); each was seen to fail on a planted break in its own phase's entry.
+  * `make check-records`, `make markdownlint` and `make disclosure-check` pass (their scripts, below).
+    `make pre-add-check` passed for each phase that changed a file that is not docs-safe: phases 2, 3, 5a, 6, 5b, 4a
+    and 4b, in their entries; phase 1 changed docs-safe files alone.
+  * `make api` reports no change against `v1.36.0`: phase 4b's run, 0 incompatible and 0 compatible, after the last
+    `.go` edit.
+  * Phase 6's acceptance: the index matches the files and their statuses (phase 6's index script, below); the matrix
+    has one row per reader task, and every MADR is accounted for ("2026-11-15: phase 6").
+* **The phases in the order they ran, with their commits.** 1, `632e097`; 2, `f629f8f`; the owner's rulings on phase
+  1's three items, `2be7f24`; 5a, `8f4cc9a`; 3, `55be71e`; the owner's rulings after phase 3 and phase 3's sentences,
+  run, `378779e`; 6, `175f269`; 5b, `7b0fbff`; 4a, `a437e28`; 4b, staged with this entry and not yet committed: its
+  commit is the coordinator's. The commits are read from `git log`, each the base the next entry records.
+* **What this PLAN leaves for later, by its own text.**
+  * The docs step in every later brief and PLAN that changes code ("After this PLAN"; the MADR's D5), and a release
+    PLAN's release-caused fixes before its tag (D4).
+  * The next code release turns `CHANGELOG.md`'s `Unreleased` into its version and carries these fixes to pkg.go.dev;
+    this PLAN cuts no tag (the MADR's question 9).
+  * Not done by design ("What this PLAN does not do"): no gate, CI job or check script; no docs-step section in
+    `AGENTS.md`, which waits on the owner's word on per-repository files (the MADR's question 8); 0048's release in CI
+    is not implemented; the 48 reports keep their form; no `docs/guides/`; no other repository.
+* **Not verified across the plan, still standing.**
+  * The tools that need a host, `gh` or a network: `remote.py` and its subcommands, `leftovers.py`, `interop.py`, the
+    hosts' gates, and `watch_ci.py`'s waits; their sentences were read from source and `--help` ("2026-11-15: phase
+    3's sentences, run"). The release steps themselves (phase 5a).
+  * `example/gemini`'s and `example/claude-code`'s flags: they need the Gemini CLI and the Claude Code adapter, and no
+    offline test covers them (the same entry).
+  * That GitHub starts `docs.yml` and skips `ci.yml` on a changelog-only push: read from the lists and
+    `check_ci_filters.py`'s matcher, not seen on a push (phase 5b).
+  * How a pkg.go.dev reader takes the two sentence forms, "which the schema fixes at" and "which the schema leaves
+    absent or null": checked against the code by phase 4b's probe, not by a reader.
+  * Behavioural claims in the ranges phase 1's report lists as read but not traced; that the 44 matrix rows are every
+    task a reader comes with (a judgment, phase 6); doc-comment claims checked by reading the code that uses each
+    member (phase 4a); test counts that count `func Test…` declarations, not subtests (phase 2).
+  * Full CI on phase 4b's push, which the coordinator runs.
+* **Closing checks**, after this entry's last edit, each output to a scratch file and its exit status taken first:
+  * `python3 -B scripts/check_records.py --check-all`: exit 0, no output.
+  * `python3 -B scripts/check_disclosure.py`: exit 0, "840 tracked file(s), 0 finding(s)".
+  * Offline `markdownlint-cli2` v0.23.2: exit 0, "Linting: 57 files", "Summary: 0 issues in 0 files".
+  * Phase 6's index script: exit 0, no output: every record file has a row, and every MADR and PLAN row's status
+    equals its frontmatter, this PLAN's `complete` among them.
+  * Phase 4a's doc-comment audit, without `-hand`: exit 0, "hand-written 0, generated 0".
+  * Phase 3's inventory audit: exit 0, "# 254 items, 0 not described". Phase 5a's changelog check: exit 0,
+    "0 finding(s)".
+  * No heavy run: only records changed after phase 4b's `pre-add-check` of 21:20 on 2026-11-15, as
+    `git diff --cached --name-only` and the files' modification times show.
+* **Files.** This PLAN (frontmatter; step 1's and step 2's amendments; annotations in the run entry; this entry); the
+  MADR (an annotation under its approval); `docs/README.md` (the MADR's and this PLAN's rows). No other file changed
+  after phase 4b's `pre-add-check` of 21:20.
+* **Commit.** Staged with phase 4b, not committed. The coordinator commits and pushes after the disclosure guard.

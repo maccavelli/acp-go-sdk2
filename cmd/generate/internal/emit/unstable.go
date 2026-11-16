@@ -128,7 +128,7 @@ func unstableFile(m *model.Model, u Unstable) *goFile {
 			if vi.Skip {
 				continue
 			}
-			emitInlineVariant(f, vi.TypeName, schemaVariantPlace(t, vi), vi.Inline, nil)
+			emitInlineVariant(f, t, vi, nil)
 			emitDecodeVariant(f, t, vi)
 		}
 	}
