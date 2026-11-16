@@ -287,3 +287,349 @@ there, not skipped, and their failures are counted and recorded apart; a failure
   annotated; the "Status" line above, annotated; this entry; the PLAN's row in `docs/README.md`.
 * **The F7 gate.** Settled before phase 1 by the amendment in the entry above: phase 4's Linux rounds are judged on the moved tests,
   F7's tests counted apart and not skipped, and the module's race gate of record runs on this Mac. No question is left open by it.
+
+### 2026-11-16: phase 1 (the audit)
+
+Run by a mainstream-tier model at high effort, as the phase prices it, on the coordinator's brief. `date +%F` printed 2026-11-16, the
+date of the drafting and the approval. Nothing in the tree changed but this entry and the PLAN's row in `docs/README.md`.
+
+* **Approval.** The owner's ruling, relayed by the coordinator and recorded in the approval entry above: "Run phases 1 to 4 through;
+  then the report". The coordinator reviews and commits this phase before phase 2 is briefed ("Order and review").
+* **Base commit.** `51c5fd4`, `main`, clean. Every line number below is that tree's, and each citation in the table was checked
+  against it by the script described under "How the list was proved complete".
+* **Read:** this PLAN and its MADR in full; every `agentproc/*_test.go`; `agentproc/agentproc.go`, `inprocess.go` and `tap.go`;
+  `AGENTS.md`, `tools/README.md`; the skills `madr-and-plan-writing` and `available-dev-hosts`.
+* **Ran, this Mac,** in a scratch copy made by `git archive HEAD`, without `-race`: `go test -list '.*' ./agentproc/` (67 names);
+  `go test -v -count=1 ./agentproc/` (102 passes, 0 failures); `GOOS=windows`, `GOOS=freebsd` and `GOOS=linux go vet ./agentproc/`,
+  each exit 0, so the platform-specific files compile.
+* **Ran, the Linux host,** the five rounds below, each through `run-on-host --need linux --race`, one heavy run at a time, in
+  chunks of one round (about 2 to 4 minutes with the queue's turn), never a WSL distro.
+
+#### The mechanisms a grace bounds
+
+The rule's letters name the exit seen within `Close`'s first step and within `WaitDelay`. Reading `agentproc.go` and `inprocess.go`
+at `51c5fd4`, six waits are bounded by a grace, and the table's "why" cells name them:
+
+| Code | The wait | Where |
+| :--- | :--- | :--- |
+| M1 | `Close`'s first step: the exit seen within the grace, else SIGTERM and `ErrTerminated` | `agentproc.go:658` |
+| M2 | its second step: the exit seen within the grace after SIGTERM, else the kill and `ErrKilled` | `agentproc.go:659` |
+| M3 | `WaitDelay`, half the grace: `Cmd.Wait` returns `exec.ErrWaitDelay` when the standard-error copy is not done within it of the exit | `agentproc.go:228`-`:230` |
+| M4 | the watcher: the connection reads to the end of the agent's output within the grace of the exit, else it is closed | `agentproc.go:368`-`:375` |
+| M5 | `Wait`'s tap drain: each tap written within the grace, else abandoned | `agentproc.go:528`-`:547` |
+| M6 | an `InProcess` agent after the kill: `Serve` returned within the grace, else `ErrAbandoned` | `inprocess.go:152`-`:158` |
+
+#### How the list was built
+
+Mechanically first, then each row read. A `go/ast` program, with `go/build` for each of five GOOS (linux, darwin, freebsd, windows,
+plan9), lists every `Test*`, `Example*` and `t.Run` call of `agentproc`'s test files: 73 tests, 6 examples and 25 `t.Run` calls, of
+which 21 have a literal name and 4 a computed one (`TestStartRefuses`, `TestCloseContextBoundsHandlers`,
+`TestCloseContextHurriesTheSteps`, `TestWaitErrorSaysTheCauseOnce`; their 5, 4, 2 and 5 subtests are the names the runs print). That
+is 100 rows from the source and 16 from the computed names: **116 rows, 104 leaves and 12 containers** (a test whose body is
+`t.Run` calls). For each test the same program lists the bounds it states: every `within(t, d, …)`, `time.After`, deadline and
+context timeout in its body, and the helpers it starts through.
+
+#### How the list was proved complete
+
+`check_table.py` (scratch) reads the table and fails unless: every test, example and subtest the source declares is one row, once;
+every row is one of them, at the line the source gives and for the platforms its build constraints give; the names `go test -list`
+prints on this Mac (67) and on the Linux host (71) are rows, and the rows built for that GOOS are the names listed; the names every
+`-v` run printed, this Mac's and the five rounds', are rows, and the rows built for that GOOS were run; and each cited line holds the
+cited text. Three examples with no `Output` comment are compiled and never run, so no list or run prints them; the 7 Windows-only
+rows come from the source alone and compile. It printed "TABLE CHECK OK: 116 rows (104 leaves, 12 containers)".
+
+Seen to fail, each on a scratch copy of the table: a row removed (`TestKillAfterExit`): "in the source, not in the table:
+TestKillAfterExit (kill_test.go:54)", and the list and run checks named it too; a row duplicated: "duplicate row:
+TestKillCutsCloseShort x2"; one of the five computed-name subtests removed: "ran but not in the table
+['TestStartRefuses/Stdout_set']" in each run; a wrong cited line: "agentproc_test.go:177 does not hold 'Wait = %v, want nil'"; a row
+for no test: "in the table, not in the source: TestNoSuchTest". The enumerating program was seen to list a test and a subtest added to
+a scratch copy of the sources (106 entries against 104: `TestPlantedUnlisted` and `TestPlantedUnlisted/planted_sub`).
+
+#### How the rule was read
+
+* A test is classed by the assertion that decides it, by the rule's table, from the code. Where the deciding wait is none of M1 to M4,
+  the rule has no letter, and the row is "unclear", not forced.
+* The rule's last column says A and B tests run under `exitGrace`. Nine of the A and B tests already run under 3 s or more (`slack`,
+  `descendantGrace`, 5 s, the default): `exitGrace` would shorten their grace. The table's "Moves" column says so: "yes" where the
+  grace is `testGrace`, "no: grace already >= exitGrace" where it is not; C and D rows do not move.
+* A test whose assertion is a bound of its own, `within(t, slack, …)` or a count of milliseconds, with no wait of the product's
+  grace in its outcome, is D: a grace does not move it.
+* Where a bound is stated in graces (`const bound = testGrace`, `ctx` timeouts of `testGrace`), it moves with the grace
+  (phase 2, step 3); the row says so.
+
+#### The table
+
+"Built for": all is every GOOS; unix is linux, darwin and freebsd. "Grace" is the grace the test's agent runs under, `testGrace`
+being 300 ms and `slack` 3 s. "Seen to fail" is of the five rounds below, on the Linux host; the Windows-only rows were not run.
+
+| Test | Defined | Built for | Grace | Agent or `Serve` | Bounds the test states | Deciding assertion, and why | Class | Moves | Seen to fail, 5 rounds |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :---: | :---: | :--- |
+| `TestStartAbandonsUnattachedAgent` | `abandon_test.go:23` | all | testGrace, never reached (Start fails) | beat | a 300 ms sleep | `abandon_test.go:45` no Close, Wait or step: Start's abandon is synchronous, and the 300 ms is a sleep over a file's size, not a grace | D | no | not seen to fail |
+| `TestStartRefuses` | `agentproc_test.go:121` | all | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestStartRefuses/nil_Cmd` | `agentproc_test.go:143` | all | none: Start refuses | none | none | `agentproc_test.go:150` Start refuses before any agent runs | D | no | not seen to fail |
+| `TestStartRefuses/nil_client` | `agentproc_test.go:143` | all | none: Start refuses | none | none | `agentproc_test.go:150` Start refuses before any agent runs | D | no | not seen to fail |
+| `TestStartRefuses/already_started` | `agentproc_test.go:143` | all | none: Start refuses | none (an eof child, started by os/exec itself) | none | `agentproc_test.go:150` Start refuses before any agent runs | D | no | not seen to fail |
+| `TestStartRefuses/Stdin_set` | `agentproc_test.go:143` | all | none: Start refuses | none | none | `agentproc_test.go:150` Start refuses before any agent runs | D | no | not seen to fail |
+| `TestStartRefuses/Stdout_set` | `agentproc_test.go:143` | all | none: Start refuses | none | none | `agentproc_test.go:150` Start refuses before any agent runs | D | no | not seen to fail |
+| `TestNoLostOutput` | `agentproc_test.go:162` | all | testGrace (300 ms) | burst child | within(slack, "Wait"); `start`: ready wait 30 s | `agentproc_test.go:176` Wait nil needs the clean exit's standard-error copy done within WaitDelay (M3), and :178 the 1000 updates read within the grace of the exit (M4); in round 5 it failed 'Wait took longer than 3s' (:174), the absolute within(slack), F7's kind, which a grace does not move | A | yes | failed in round 5 |
+| `TestCloseLadder` | `agentproc_test.go:188` | all | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestCloseLadder/exits_at_its_input's_end` | `agentproc_test.go:190` | all | testGrace (300 ms) | eof child | within(slack, "Close"); `start`: ready wait 30 s | `agentproc_test.go:194` Close nil and under one grace: the exit seen within the first step (M1) | A | yes | failed in round 3 |
+| `TestCloseLadder/exits_on_SIGTERM` | `agentproc_test.go:198` | all (the unix branch; windows takes :203, class C) | testGrace (300 ms) | term child | within(testGrace*2+slack, "Close"); `start`: ready wait 30 s | `agentproc_test.go:209` waits the first step out, then needs the exit on SIGTERM seen within the second (M2): ErrTerminated and not ErrKilled, under two graces | B | yes | failed in round 3 |
+| `TestCloseLadder/ignores_both` | `agentproc_test.go:213` | all | testGrace (300 ms) | stubborn child | within(testGrace*2+slack, "Close"); `start`: ready wait 30 s | `agentproc_test.go:221` waits both graces out; asserts ErrKilled and a floor | C | no | not seen to fail |
+| `TestStderrHeldByDescendant` | `agentproc_test.go:234` | all | descendantGrace (6 s) | parent-stderr child | within(descendantGrace*3+slack, "Close"); `startTapped`: ready wait 30 s | `agentproc_test.go:242` Close = exec.ErrWaitDelay and no signal: the exit seen within the first step after WaitDelay (M1, M3) | A | no: already 2*slack (0027-PLAN step 9) | not seen to fail |
+| `TestDefaultGrace` | `agentproc_test.go:250` | all | default 5 s (Grace 0 and -1 s) | eof child | none | `agentproc_test.go:258` asserts the grace's value and WaitDelay's; Close nil at :262 is incidental, at 5 s | D | no | not seen to fail |
+| `TestCloseIdempotent` | `agentproc_test.go:281` | all | testGrace (300 ms) | stubborn child | `start`: ready wait 30 s | `agentproc_test.go:291` waits both graces out; asserts the same ErrKilled from concurrent calls | C | no | not seen to fail |
+| `TestClientDeathEndsAgentAtInputEnd` | `agentproc_unix_test.go:22` | unix | default 5 s (the owner child's Start) | owner child, eof agent | `killOwner`: a 30 s ready wait; `requireGone`: 2 s | `agentproc_unix_test.go:82` the agent ends at its input's end after its client is killed; the bound is 2 s, absolute, with no Close | D | no | not seen to fail |
+| `TestEscapedDescendantDoesNotHoldWait` | `agentproc_unix_test.go:92` | unix | testGrace (300 ms) | parent-escape child | within(testGrace+slack, "Wait"); `startBeating`: ready wait 30 s, a 400 ms beat window | `agentproc_unix_test.go:103` Wait nil of an agent that exits of itself: the copy done within WaitDelay (M3); it also waits the grace out for the held output (M4) | A | yes | not seen to fail |
+| `TestTapKeepsCloseEnding` | `agentproc_unix_test.go:120` | unix | testGrace (300 ms) | parent-escape child | within(testGrace+slack, "Wait"); `startTapped`: ready wait 30 s | `agentproc_unix_test.go:135` as TestEscapedDescendantDoesNotHoldWait, with an output tap | A | yes | not seen to fail |
+| `TestKillClosesAtOnce` | `agentproc_unix_test.go:144` | unix | default 5 s (Grace 0) | parent-escape child | within(slack, "Kill"); `startTapped`: ready wait 30 s | `agentproc_unix_test.go:163` Kill, with no step waited; the bound is slack, absolute, shorter than the grace so that waiting it out would fail | D | no | not seen to fail |
+| `TestStartRefusesSharedGroup` | `agentproc_unix_test.go:170` | unix | none: Start refuses | none (eof child, not started) | none | `agentproc_unix_test.go:175` Start refuses before any agent runs | D | no | not seen to fail |
+| `TestCloseContextBoundsHandlers` | `closecontext_test.go:125` | all | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestCloseContextBoundsHandlers/in_process,_CloseContext` | `closecontext_test.go:142` | all | testGrace (300 ms); ctx bound = testGrace (:145) | InProcess, acp.ServeAgent over a ScriptAgent | ctx timeout bound; within(bound+testGrace+slack, m.name); within(slack, "Wait"); `hang`: ready wait 30 s | `closecontext_test.go:159` Wait nil after the release, as a CloseContext's: the exit seen within the first step (M1), which the bound, testGrace, also cuts short (agentproc.go:594); the bound stands in graces and moves with the grace | A | yes | not seen to fail |
+| `TestCloseContextBoundsHandlers/in_process,_KillContext` | `closecontext_test.go:142` | all | testGrace (300 ms); ctx bound = testGrace (:145) | InProcess, acp.ServeAgent over a ScriptAgent | ctx timeout bound; within(bound+testGrace+slack, m.name); within(slack, "Wait"); `hang`: ready wait 30 s | `closecontext_test.go:149` kill is the expected path, so no exit need be seen in a step (not A) and no grace is waited out (not C); yet ErrHandlersRunning (:149) is joined only if Wait's goroutine reached the connection's wait before the bound, testGrace (agentproc.go:644), after Kill's abandon wait (M6): a grace-linked outcome the rule has no letter for | unclear | undecided | not seen to fail |
+| `TestCloseContextBoundsHandlers/a_child,_CloseContext` | `closecontext_test.go:142` | all | testGrace (300 ms); ctx bound = testGrace (:145) | burst child | ctx timeout bound; within(bound+testGrace+slack, m.name); within(slack, "Wait"); `hang`: ready wait 30 s | `closecontext_test.go:159` Wait nil after the release: neither ErrKilled nor exec.ErrWaitDelay is accepted for a CloseContext (M1, M3) | A | yes | failed in round 3 |
+| `TestCloseContextBoundsHandlers/a_child,_KillContext` | `closecontext_test.go:142` | all | testGrace (300 ms); ctx bound = testGrace (:145) | burst child | ctx timeout bound; within(bound+testGrace+slack, m.name); within(slack, "Wait"); `hang`: ready wait 30 s | `closecontext_test.go:159` Wait after the release may be nil or ErrKilled, but not exec.ErrWaitDelay: the standard-error copy done within WaitDelay of the exit (M3) | A | yes | not seen to fail |
+| `TestCloseContextJoinsTheAgentsError` | `closecontext_test.go:174` | all | testGrace (300 ms); ctx bound = testGrace (:180) | InProcess, ServeAgent then errServe | ctx timeout testGrace; within(2*testGrace+slack, "CloseContext"); `hang`: ready wait 30 s | `closecontext_test.go:184` the error equals the join with errServe alone, so no SIGTERM: the exit seen within the first step (M1) | A | yes | not seen to fail |
+| `TestCloseContextWaitsForHandlers` | `closecontext_test.go:192` | all | testGrace (300 ms); ctx 5 s | InProcess, ServeAgent over a ScriptAgent | ctx timeout 5*time.Second; within(5*time.Second+slack, "CloseContext"); `hang`: ready wait 30 s | `closecontext_test.go:200` CloseContext nil: the exit seen within the first step (M1), the handler released at testGrace/2 | A | yes | not seen to fail |
+| `TestCloseContextHurriesTheSteps` | `closecontext_test.go:212` | all | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestCloseContextHurriesTheSteps/CloseContext` | `closecontext_test.go:223` | all | 5 s; ctx bound = testGrace (:214) | stubborn child | ctx timeout bound; within(3*grace+slack, m.name); `startTapped`: ready wait 30 s | `closecontext_test.go:229` the context's end cuts the steps short; asserts ErrKilled without ErrTerminated and a floor, the bound | C | no | not seen to fail |
+| `TestCloseContextHurriesTheSteps/KillContext` | `closecontext_test.go:223` | all | 5 s; ctx bound = testGrace (:214) | stubborn child | ctx timeout bound; within(3*grace+slack, m.name); `startTapped`: ready wait 30 s | `closecontext_test.go:229` the context's end cuts the steps short; asserts ErrKilled without ErrTerminated and a floor, the bound | C | no | not seen to fail |
+| `TestCloseContextCause` | `closecontext_test.go:242` | all | testGrace (300 ms); ctx bound = testGrace (:246) | InProcess, ServeAgent over a ScriptAgent | ctx timeout testGrace; within(2*testGrace+slack, "CloseContext"); `hang`: ready wait 30 s | `closecontext_test.go:249` asserts the cause and ErrHandlersRunning only, so no exit need be seen in a step; ErrHandlersRunning needs Wait's goroutine inside the connection's wait before the bound, testGrace (agentproc.go:644): grace-linked, no letter | unclear | undecided | not seen to fail |
+| `TestCloseContextNotHandlers` | `closecontext_test.go:259` | all | 2 s; ctx bound 100 ms (:282) | burst child, blocked tap | ctx timeout readyWait; ctx timeout bound; within(2*time.Second+slack, "CloseContext") | `closecontext_test.go:290` Wait nil after the release: the exit seen already (:278), so no step is waited; the copy done within WaitDelay, 1 s (M3) | A | decide: grace 2 s, below exitGrace, is the drain wait the 100 ms bound races | not seen to fail |
+| `TestCloseContextOneGoroutine` | `closecontext_test.go:298` | all | testGrace (300 ms) | InProcess, ServeAgent over a ScriptAgent | deadline +slack; `hang`: ready wait 30 s | `closecontext_test.go:310` asserts a count of goroutines, and that the waiter ends within slack of the release; no step's outcome | D | no | not seen to fail |
+| `TestInProcessEndsAtInputEnd` | `inprocess_test.go:86` | all | 5 s | InProcess, a Serve that ends at its input's end | within(slack, "Close") | `inprocess_test.go:96` Serve's own error alone, no signal: the exit seen within the first step (M1); :99 adds an absolute 1 s | A | no: grace already >= exitGrace | not seen to fail |
+| `TestInProcessTerminate` | `inprocess_test.go:106` | all | testGrace (300 ms) | InProcess, Serve waits for its context | within(2*testGrace+slack, "Close") | `inprocess_test.go:115` waits the first step out, then needs Serve's return after the cancel seen within the second (M2): ErrTerminated and not ErrKilled; and a floor at :121 | B | yes | not seen to fail |
+| `TestInProcessKill` | `inprocess_test.go:129` | all | testGrace (300 ms) | InProcess, readUntilFailure | within(3*testGrace+slack, "Close") | `inprocess_test.go:133` waits two steps out, then needs Serve's return after the kill seen within the next, the abandonment wait (M6): ErrKilled and not ErrAbandoned | B | yes | not seen to fail |
+| `TestInProcessAbandon` | `inprocess_test.go:142` | all | testGrace (300 ms) | InProcess, Serve blocked until released | within(3*testGrace+slack, "Close"); time.After(slack) | `inprocess_test.go:155` waits three graces out; asserts ErrKilled and ErrAbandoned and a floor of three graces | C | no | not seen to fail |
+| `TestInProcessKillAtOnce` | `inprocess_test.go:177` | all | 5 s | InProcess, readUntilFailure | within(slack, "Kill") | `inprocess_test.go:181` Kill waits no step, and needs Serve's return after the kill seen within the abandonment wait (M6), here 5 s, and within 1 s absolute: B's shape without the waits, which the rule does not name | unclear | no: grace already >= exitGrace | not seen to fail |
+| `TestWaitErrorSaysTheCauseOnce` | `inprocess_test.go:200` | all | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestWaitErrorSaysTheCauseOnce/Kill,_Serve_returning_its_cause` | `inprocess_test.go:227` | all | testGrace (300 ms) | InProcess, causeServe | within(3*testGrace+slack, "the stop") | `inprocess_test.go:235` Kill waits no step, and the exact text 'agentproc: agent killed' needs Serve's return within the abandonment wait (M6); with ErrAbandoned joined the text differs: B's shape without the waits | unclear | undecided | not seen to fail |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_returning_its_cause` | `inprocess_test.go:227` | all | testGrace (300 ms) | InProcess, causeServe | within(3*testGrace+slack, "the stop") | `inprocess_test.go:235` waits the first step out, then needs Serve's return seen within the second: the text 'agent terminated' and ErrTerminated, not a kill's | B | yes | not seen to fail |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_wrapping_its_cause` | `inprocess_test.go:227` | all | testGrace (300 ms) | InProcess, a Serve wrapping its cause | within(3*testGrace+slack, "the stop") | `inprocess_test.go:235` as above | B | yes | not seen to fail |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_returning_its_own_error` | `inprocess_test.go:227` | all | testGrace (300 ms) | InProcess, a Serve returning errServe | within(3*testGrace+slack, "the stop") | `inprocess_test.go:235` as above | B | yes | not seen to fail |
+| `TestWaitErrorSaysTheCauseOnce/abandoned` | `inprocess_test.go:227` | all | testGrace (300 ms) | InProcess, Serve blocked until released | within(3*testGrace+slack, "the stop") | `inprocess_test.go:235` waits three graces out; the expected text is the abandonment's | C | no | not seen to fail |
+| `TestWaitErrorSaysTheCauseOnce/a_child,_killed` | `inprocess_test.go:240` | all | testGrace (300 ms) | stubborn child | within(2*testGrace+slack, "Close"); `start`: ready wait 30 s | `inprocess_test.go:244` waits both graces out; asserts ErrKilled said once, first | C | no | not seen to fail |
+| `TestInProcessReturnsFirst` | `inprocess_test.go:253` | all | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestInProcessReturnsFirst/Serve_first` | `inprocess_test.go:255` | all | testGrace (300 ms) | InProcess, Serve returns nil | within(testGrace+slack, "Wait") | `inprocess_test.go:261` no Close before Wait: Serve returned of itself, and no step or WaitDelay applies to an InProcess agent; ExitedFirst is set at its return (agentproc.go:359-363) | D | no | not seen to fail |
+| `TestInProcessReturnsFirst/connection_first` | `inprocess_test.go:265` | all | testGrace (300 ms) | InProcess, Serve copies its input to Discard | within(testGrace+slack, "Wait") | `inprocess_test.go:275` Wait nil after the connection's close: monitor runs Close's steps, and the exit must be seen within the first (M1), else ErrTerminated | A | yes | not seen to fail |
+| `TestInProcessClientWriteAfterReturn` | `inprocess_test.go:287` | all | testGrace (300 ms) | InProcess, Serve returns nil | time.After(slack); within(slack, "Initialize") | `inprocess_test.go:299` a write after Serve's return fails: bounds are slack, absolute; no step | D | no | not seen to fail |
+| `TestInProcessEndClosesInput` | `inprocess_test.go:310` | all | testGrace (300 ms) | InProcess, Serve returns nil | within(testGrace+slack, "Wait"); within(slack, "a read of the agent's input") | `inprocess_test.go:324` no Close before Wait; asserts which end of a pipe was closed | D | no | not seen to fail |
+| `TestInProcessTaps` | `inprocess_test.go:333` | all | 5 s | InProcess, Serve writes 64 MiB | none | `inprocess_test.go:353` no Close before Wait, and no exit to be seen; the outcome is the tap drained within the grace (M5, agentproc.go:528-547), which the rule has no letter for | unclear | no: grace already >= exitGrace | not seen to fail |
+| `TestInProcessServeAgentStep2` | `inprocess_test.go:383` | all | slack (3 s) | InProcess, acp.ServeAgent, a prompt in flight | time.After(slack); within(3*slack+slack, "Close") | `inprocess_test.go:410` waits the first step out (the prompt holds Serve), then needs ServeAgent's return seen within the second: ErrTerminated and not ErrKilled | B | no: already slack (0049 phase 3) | not seen to fail |
+| `TestInProcessDetachedTapIsPrefix` | `inprocess_test.go:437` | all | 5 s | InProcess, Serve writes 56 + 8 MiB | time.After(readyWait); deadline +readyWait | `inprocess_test.go:473` Close nil: the last 8 MiB written, and so Serve's return, within the first step, 5 s (M1); a throughput bound under -race, F7 | A | no: grace already >= exitGrace; F7 | failed in round 3, 4, 5 |
+| `TestInProcessStartRefuses` | `inprocess_test.go:487` | all | none: Start refuses | none | none | `inprocess_test.go:500` Start refuses before any Serve runs | D | no | not seen to fail |
+| `TestKill` | `kill_test.go:16` | all | default 5 s (Grace 0) | parent-wait child | within(slack, "Kill"); `startTapped`: ready wait 30 s | `kill_test.go:24` Kill waits no step: ErrKilled alone, within slack, absolute, shorter than the grace so that waiting it out would fail | D | no | not seen to fail |
+| `TestKillCutsCloseShort` | `kill_test.go:35` | all | 5 s | stubborn child | within(slack, "Kill"); time.After(slack); `startTapped`: ready wait 30 s | `kill_test.go:44` Kill cuts a Close short: ErrKilled from both, within slack, absolute | D | no | not seen to fail |
+| `TestKillAfterExit` | `kill_test.go:54` | all | testGrace (300 ms) | parent-exit child | time.After(readyWait); within(testGrace+slack, "Kill"); `startTapped`: ready wait 30 s | `kill_test.go:64` Kill and Wait nil after an exit of itself already seen: nothing is sent, so only WaitDelay (M3) can make Wait's error not nil | A | yes | not seen to fail |
+| `TestLineTapFrames` | `linetap_test.go:48` | all | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestLineTapFrames/whole` | `linetap_test.go:63` | all | none: no agent | none | none | `linetap_test.go:59` a LineTap alone, no agent or step | D | no | not seen to fail |
+| `TestLineTapFrames/a_byte_at_a_time` | `linetap_test.go:64` | all | none: no agent | none | none | `linetap_test.go:59` a LineTap alone, no agent or step | D | no | not seen to fail |
+| `TestLineTapFrames/every_split` | `linetap_test.go:65` | all | none: no agent | none | none | `linetap_test.go:59` a LineTap alone, no agent or step | D | no | not seen to fail |
+| `TestLineTapCopies` | `linetap_test.go:77` | all | none: no agent | none | none | `linetap_test.go:99` a LineTap alone | D | no | not seen to fail |
+| `TestLineTapHoldsUnended` | `linetap_test.go:109` | all | none: no agent | none | none | `linetap_test.go:128` a LineTap alone | D | no | not seen to fail |
+| `TestLineTapNilFn` | `linetap_test.go:135` | all | none: no agent | none | none | `linetap_test.go:139` LineTap(nil) panics | D | no | not seen to fail |
+| `TestLineTapAsOutputTap` | `linetap_test.go:148` | all | testGrace (300 ms) | frames child | `startTapped`: ready wait 30 s | `linetap_test.go:153` Close nil: the exit seen within the first step (M1); the frames equal at :157 also need the tap drained within the grace (M5) | A | yes | failed in round 5 |
+| `TestDefaultPdeathsig` | `pdeathsig_test.go:26` | linux/freebsd | testGrace (300 ms) | eof child | `startCmd`: ready wait 30 s | `pdeathsig_test.go:34` Close nil: the exit seen within the first step (M1) | A | yes | not seen to fail |
+| `TestCallersPdeathsigKept` | `pdeathsig_test.go:39` | linux/freebsd | testGrace (300 ms) | eof child | `startCmd`: ready wait 30 s | `pdeathsig_test.go:48` Close nil: the exit seen within the first step (M1) | A | yes | failed in round 2 |
+| `TestClientDeathEndsAgent` | `pdeathsig_test.go:56` | linux/freebsd | default 5 s (the owner child's Start) | owner child, stubborn agent | `killOwner`: a 30 s ready wait; `requireGone`: 2 s | `agentproc_unix_test.go:82` the agent ends at its client's death; the bound is 2 s, absolute | D | no | not seen to fail |
+| `TestStartFromExitingLockedGoroutine` | `pdeathsig_test.go:66` | linux/freebsd | testGrace (300 ms) | stubborn child | time.After(readyWait); time.After(time.Second) | `pdeathsig_test.go:101` waits both graces out; asserts ErrKilled | C | no | not seen to fail |
+| `TestTailWriterCaps` | `stderr_test.go:16` | all | none: no agent | none | none | `stderr_test.go:41` a tail writer alone | D | no | not seen to fail |
+| `TestTailWriterForwards` | `stderr_test.go:49` | all | none: no agent | none | none | `stderr_test.go:58` a tail writer alone | D | no | not seen to fail |
+| `TestStderrTailOfFailedAgent` | `stderr_test.go:87` | all | testGrace (300 ms) | stderr-fail child | `startStderrFail`: WaitContext within 30 s | `stderr_test.go:92` the tail and the caller's copy hold all 100 lines: the standard-error copy done within WaitDelay of the exit (M3), else os/exec closes the pipe and lines are lost | A | yes | not seen to fail |
+| `TestStderrTailNotJoined` | `stderr_test.go:110` | all | testGrace (300 ms) | stderr-fail child | `startStderrFail`: WaitContext within 30 s | `stderr_test.go:116` the tail ends at line 100: the copy done within WaitDelay of the exit (M3) | A | yes | not seen to fail |
+| `TestStderrTailOfKilledAgent` | `stderr_test.go:123` | all | testGrace (300 ms) | stubborn child | within(slack, "Kill"); `awaitReady`: ready wait 30 s | `stderr_test.go:136` Kill waits no step; the tail is the line written long before the kill | D | no | not seen to fail |
+| `TestInProcessHasNoStderrTail` | `stderr_test.go:143` | all | testGrace (300 ms) | InProcess, Serve returns errServe | within(testGrace+slack, "Wait") | `stderr_test.go:146` no Close before Wait; an InProcess agent has no step or WaitDelay in this path | D | no | not seen to fail |
+| `TestStderrErrorText` | `stderr_test.go:158` | all | none: no agent | none | none | `stderr_test.go:165` an error's text alone | D | no | not seen to fail |
+| `TestOutputTapVerbatim` | `tap_test.go:215` | all | slack (3 s) (tappedFrames) | frames child, 1 ms a tap write | `tappedFrames`: grace slack, a 30 s wait for the input tap | `tap_test.go:218` Close nil (:205) is met at slack (M1); the outcome is the 2 MiB tap, 1 ms a write, drained within the grace (M5), which the rule has no letter for; in round 1 it failed at slack: 31 of 32 64 KiB writes done when the 3 s drain ended (tap.go:76 does not count the write in flight as dropped) | unclear | no: grace already >= exitGrace | failed in round 1 |
+| `TestInputTapSeesWrites` | `tap_test.go:229` | all | slack (3 s) (tappedFrames) | frames child | `tappedFrames`: grace slack, a 30 s wait for the input tap | `tap_test.go:233` as TestOutputTapVerbatim: Close nil (:205) at slack, and the input tap drained within the grace (M5) | unclear | no: grace already >= exitGrace | not seen to fail |
+| `TestTapErrorIgnored` | `tap_test.go:242` | all | testGrace (300 ms) | burst child, failing taps | within(slack, "Wait") | `tap_test.go:257` Wait nil of an exit of itself: the copy done within WaitDelay (M3), the updates read within the grace of the exit (M4); the failing taps' drain is M5; under the in-process load it failed 'Wait took longer than 3s' (:256), F7 (MADR) | A | yes | failed in round 5 |
+| `TestTapsUnset` | `tap_test.go:266` | all | none: no agent | none | none | `tap_test.go:275` streams alone | D | no | not seen to fail |
+| `TestBlockedTapDetached` | `tap_test.go:288` | all | testGrace (300 ms) | bulk child, 48 MiB, tap blocked | deadline +readyWait; within(testGrace+slack, "Close"); deadline +slack; `awaitReady`: ready wait 30 s | `tap_test.go:312` Close nil within TG+slack: the exit seen within the first step (M1), the blocked tap abandoned after the grace (M5); F7 when it fails 'did not say it was ready within 30s' (:294) | A | yes (its Close also waits the grace out, M5: about exitGrace a run) | failed in round 1, 2 |
+| `TestDetachedTapIsPrefix` | `tap_test.go:330` | all | 5 s | bulk child, 56 + 8 MiB, tap blocked | deadline +readyWait; `awaitReady`: ready wait 30 s | `tap_test.go:349` Close nil: the last 8 MiB written, and the exit, within the first step, 5 s (M1); a throughput bound under -race, F7 | A | no: grace already >= exitGrace; F7 | failed in round 1 |
+| `TestCloseReadsTheAgentsLastOutput` | `tap_test.go:368` | all | 5 s | last child | within(c.Grace+slack, "Close"); `awaitReady`: ready wait 30 s | `tap_test.go:398` Close nil within grace+slack: the exit seen within the first step (M1); the tap complete needs M4 and M5 within 5 s; in round 2 it failed at 5 s, 'agent terminated: signal: terminated': the agent's exit follows the connection's read of 2 MiB through a 5 ms read hook, a throughput as F7's (read, not measured) | A | no: grace already >= exitGrace | failed in round 2 |
+| `TestTapDrainBoundedByGrace` | `tap_test.go:415` | all | testGrace (300 ms) | bulk child, 24 MiB, tap blocked | within(testGrace+slack, "Close"); `startTapped`: ready wait 30 s | `tap_test.go:425` Close nil: the exit seen within the first step (M1); then the drain waits the grace out and abandons the blocked tap (M5, the assertion at :427) | A | yes (its Close also waits the grace out, M5: about exitGrace a run) | not seen to fail |
+| `TestDescendantsEnded` | `ties_test.go:47` | all (skips where hasTree is false) | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestDescendantsEnded/the_agent_exits_at_its_input's_end` | `ties_test.go:52` | all (skips where hasTree is false) | testGrace (300 ms) | parent child, beat grandchild | within(testGrace+slack, "Close"); `startBeating`: ready wait 30 s, a 400 ms beat window | `ties_test.go:56` Close nil: the exit seen within the first step (M1); CI run 43875424670's failure | A | yes | failed in round 3 |
+| `TestDescendantsEnded/the_agent_is_terminated` | `ties_test.go:62` | all (skips where hasTree is false) | testGrace (300 ms) | parent-wait child | within(2*testGrace+slack, "Close"); `startBeating`: ready wait 30 s, a 400 ms beat window | `ties_test.go:66` ErrTerminated or ErrKilled, either way | C | no | not seen to fail |
+| `TestDescendantsEnded/the_agent_exits_of_itself` | `ties_test.go:72` | all (skips where hasTree is false) | testGrace (300 ms) | parent-exit child | within(testGrace+slack, "Wait"); `startCmd`: ready wait 30 s | `ties_test.go:84` Wait nil of an exit of itself: the copy done within WaitDelay (M3), and the connection closed after Wait (M4) | A | yes | not seen to fail |
+| `TestExitedFirst` | `ties_test.go:103` | all | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestExitedFirst/the_agent_exits_first` | `ties_test.go:128` | all | testGrace (300 ms) (50 runs) | parent-exit child | the shared `run` (`ties_test.go:105`): time.After(readyWait) for the exit; within(testGrace+slack, "Wait"); `startCmd`: ready wait 30 s | `ties_test.go:121` Wait nil (M3) and ExitedFirst true after a clean exit of itself | A | yes | not seen to fail |
+| `TestExitedFirst/the_connection_ends_first` | `ties_test.go:132` | all | testGrace (300 ms) (50 runs) | closeout child | the shared `run` (`ties_test.go:105`): time.After(readyWait) for the exit; within(testGrace+slack, "Wait"); `startCmd`: ready wait 30 s | `ties_test.go:121` Wait nil after the connection ended first: monitor's Close needs the exit at the input's end seen within the first step (M1), and ExitedFirst false | A | yes | not seen to fail |
+| `TestCallersCommandKept` | `ties_test.go:141` | all | testGrace (300 ms) | where child | `startCmd`: ready wait 30 s | `ties_test.go:149` Close nil: the exit seen within the first step (M1) | A | yes | not seen to fail |
+| `TestConnectionEndStopsAgent` | `ties_test.go:182` | all | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestConnectionEndStopsAgent/the_caller_closes_the_connection` | `ties_test.go:184` | all | testGrace (300 ms) | stubborn child | within(2*testGrace+slack, "Wait"); `start`: ready wait 30 s | `ties_test.go:190` waits both graces out; asserts ErrKilled | C | no | not seen to fail |
+| `TestConnectionEndStopsAgent/a_notification_overflow` | `ties_test.go:194` | all | testGrace (300 ms) | flood child | time.After(testGrace + slack) | `ties_test.go:223` Wait nil: the exit at the input's end seen within the first step (M1) after the overflow closed the connection; the Done wait at :216 is TG+slack | A | yes | not seen to fail |
+| `TestTranscriptLines` | `transcript_test.go:40` | all | none: no agent | none | none | `transcript_test.go:68` a Transcript alone | D | no | not seen to fail |
+| `TestTranscriptWriteError` | `transcript_test.go:80` | all | none: no agent | none | none | `transcript_test.go:86` a Transcript alone | D | no | not seen to fail |
+| `TestTranscriptOfSession` | `transcript_test.go:129` | all | testGrace (300 ms) | InProcess, acp.ServeAgent | none | `transcript_test.go:156` Close nil: ServeAgent's return seen within the first step (M1) | A | yes | not seen to fail |
+| `TestTranscriptCloseAfterAbandon` | `transcript_test.go:219` | all | 100 ms (its own) | InProcess, Serve writes 5000 frames | none | `transcript_test.go:241` needs the tap still writing when the 100 ms drain ends (M5): it waits the grace out, and asserts the abandonment | C | no | not seen to fail |
+| `TestProcessWaitContext` | `waitcontext_test.go:21` | all | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestProcessWaitContext/ctx_ends_first` | `waitcontext_test.go:23` | all | testGrace (300 ms) | eof child | `start`: ready wait 30 s | `waitcontext_test.go:38` Close nil: the exit seen within the first step (M1) | A | yes | not seen to fail |
+| `TestProcessWaitContext/the_agent_ends_first` | `waitcontext_test.go:44` | all | testGrace (300 ms) | parent-exit child | `startCmd`: ready wait 30 s | `waitcontext_test.go:50` WaitContext nil of an exit of itself (M3), ExitedFirst true | A | yes | not seen to fail |
+| `TestProcessWaitContext/one_goroutine` | `waitcontext_test.go:56` | all | testGrace (300 ms) | eof child | deadline +slack; `start`: ready wait 30 s | `waitcontext_test.go:71` Close nil (a Fatalf guard): the exit seen within the first step (M1); the goroutine counts are no grace's | A | yes | not seen to fail |
+| `ExampleCommand` | `example_test.go:27` | all | default 5 s | my-agent (no Output: compiled, not run) | none | `example_test.go:27` has no Output comment: compiled, never run | D | no | not run (no Output comment) |
+| `ExampleLineTap` | `example_test.go:48` | all | default 5 s | my-agent (no Output: compiled, not run) | none | `example_test.go:48` has no Output comment: compiled, never run | D | no | not run (no Output comment) |
+| `ExampleCommand_outputTap` | `example_test.go:64` | all | default 5 s | my-agent (no Output: compiled, not run) | none | `example_test.go:64` has no Output comment: compiled, never run | D | no | not run (no Output comment) |
+| `ExampleInProcess` | `example_test.go:99` | all | default 5 s | InProcess, acp.ServeAgent over a ScriptAgent | none | `example_test.go:112` the output 'close: <nil>': the exit seen within the first step (M1), at the default 5 s | A | no: grace already >= exitGrace (a public example of the default) | not seen to fail |
+| `ExampleProcess_CloseContext` | `example_test.go:122` | all | default 5 s; ctx 5 s | InProcess, acp.ServeAgent over a ScriptAgent | ctx timeout 5*time.Second | `example_test.go:137` the output 'close: <nil>': the exit seen within the first step (M1), at the default 5 s | A | no: grace already >= exitGrace (a public example of the default) | not seen to fail |
+| `ExampleTranscript` | `example_test.go:146` | all | default 5 s | InProcess, acp.ServeAgent over a ScriptAgent | none | `example_test.go:163` Close nil: the exit seen within the first step (M1), at the default 5 s | A | no: grace already >= exitGrace (a public example of the default) | not seen to fail |
+| `TestClientDeathEndsTree` | `agentproc_windows_test.go:14` | windows | default 5 s (the owner child's Start) | owner child, parent-wait agent | time.After(readyWait) | `agentproc_windows_test.go:33` the job ends the tree at its client's death: the bound is the absolute 400 x 25 ms of the child | D | no | not run (Windows only) |
+| `TestBreakawayLeavesJob` | `breakaway_windows_test.go:45` | windows | - | - | - | a container: its subtests are the rows after it | - | - | - |
+| `TestBreakawayLeavesJob/Close` | `breakaway_windows_test.go:47` | windows | testGrace (300 ms) | parent-breakaway child | the shared `breakaway` (`breakaway_windows_test.go:59`): within(testGrace+slack, "stop"); a 30 s ready wait | `breakaway_windows_test.go:79` Close nil (its ok func is err == nil): the exit at the input's end seen within the first step (M1) | A | yes | not run (Windows only) |
+| `TestBreakawayLeavesJob/Kill` | `breakaway_windows_test.go:51` | windows | testGrace (300 ms) | parent-breakaway child | the shared `breakaway` (`breakaway_windows_test.go:59`): within(testGrace+slack, "stop"); a 30 s ready wait | `breakaway_windows_test.go:79` Kill waits no step: ErrKilled is the expected outcome | D | no | not run (Windows only) |
+| `TestDescendantInJobDespiteSlowAttach` | `suspended_windows_test.go:25` | windows | testGrace (300 ms) | parent child, beat grandchild | within(testGrace+slack, "Close"); `startBeating`: ready wait 30 s, a 400 ms beat window | `suspended_windows_test.go:31` Close nil: the exit seen within the first step (M1), after a 200 ms attach delay | A | yes | not run (Windows only) |
+| `TestStartRefusesSuspended` | `suspended_windows_test.go:60` | windows | none: Start refuses | none | none | `suspended_windows_test.go:65` Start refuses before any agent runs | D | no | not run (Windows only) |
+| `TestCallersCreationFlagsKept` | `suspended_windows_test.go:72` | windows | testGrace (300 ms) | eof child | `startCmd`: ready wait 30 s | `suspended_windows_test.go:81` Close nil: the exit seen within the first step (M1) | A | yes | not run (Windows only) |
+
+#### Counts
+
+| Class | Leaves | Of which |
+| :--- | ---: | :--- |
+| A | 41 | 32 move to `exitGrace`; 8 no, grace already at least `slack`; 1 to decide (`TestCloseContextNotHandlers`, 2 s) |
+| B | 7 | 6 move; 1 no (`TestInProcessServeAgentStep2`, already `slack`) |
+| C | 11 | none moves |
+| D | 38 | none moves |
+| unclear | 7 | 3 at `testGrace`, 4 at a grace of `slack` or more |
+| | 104 | and 12 containers: 116 rows |
+
+**A and B together: 48. Of them, 38 run under `testGrace` and move, 9 do not move, and 1 is for the coordinator to decide.** Of the 48,
+12 were seen to fail in the five rounds (4 of them F7's tests), 33 were not, and 3, Windows-only, were not run.
+
+#### The chunks
+
+Each round ran the whole package at `51c5fd4` in a scratch copy beside the MADR's in-process load, through the fleet's
+`run-on-host --need linux --race`, one heavy run at a time on the host. `chunk.sh` ran, on the host,
+`GOMAXPROCS=2 BURN=32 BURN_FOR=60s go test -race -shuffle=on -count=1 -v ./agentproc/`, and printed the seed. Round 1 also ran
+`go test -list '.*' ./agentproc/` there (71 names). Each chunk's own exit status was 0; the test run's, printed by the script, was 1
+in every round.
+
+| Chunk | Command | Rounds | Seed | Result |
+| :--- | :--- | ---: | :--- | :--- |
+| R1 | `run-on-host --need linux --race -- sh chunk.sh 1` | 1 | 1794842628057943104 | FAIL in 109.312 s; failing tests 3, passes 104, skips 0 |
+| R2 | `run-on-host --need linux --race -- sh chunk.sh 2` | 1 | 1794842855249088448 | FAIL in 104.753 s; failing tests 3, passes 104, skips 0 |
+| R3 | `run-on-host --need linux --race -- sh chunk.sh 3` | 1 | 1794842976527828494 | FAIL in 108.824 s; failing tests 5, passes 99, skips 0 |
+| R4 | `run-on-host --need linux --race -- sh chunk.sh 4` | 1 | 1794843102361850269 | FAIL in 107.601 s; failing tests 1, passes 106, skips 0 |
+| R5 | `run-on-host --need linux --race -- sh chunk.sh 5` | 1 | 1794843224957491326 | FAIL in 105.634 s; failing tests 4, passes 103, skips 0 |
+
+**The load.** The MADR's, rebuilt from its description (F3, F4: 32 busy goroutines in the test process, `GOMAXPROCS=2`, a scratch-only
+test file): `zz_burn_test.go`, `TestZZBurn`, written afresh in the scratch copy and absent from the tree; it skips unless `BURN` is set,
+calls `t.Parallel()`, and runs `BURN` goroutines in a busy loop for `BURN_FOR`. Its shape is that of the earlier scratch test of the
+root-cause work, which was read before this one was written; `BURN_FOR` is this audit's, 60 s (the earlier run used 45 s). It passed in
+60.1 s in each round and is excluded from every list above.
+
+#### The failures of the five rounds
+
+16 failing tests in all, none a container. Messages are the test's own, verbatim.
+
+| Round | Seed | Test | Took | Message | Class |
+| ---: | :--- | :--- | ---: | :--- | :---: |
+| 1 | 1794842628057943104 | `TestDetachedTapIsPrefix` | 23.21 s | `tap_test.go:349: Close = agentproc: agent terminated: signal: terminated` | A, F7 |
+| 1 | 1794842628057943104 | `TestBlockedTapDetached` | 31.96 s | `tap_test.go:294: the bulk agent did not say it was ready within 30s` | A, F7 |
+| 1 | 1794842628057943104 | `TestOutputTapVerbatim` | 5.55 s | `tap_test.go:219: the output tap received 2031616 bytes, want the agent's 2097208, equal; tap_test.go:222: DroppedTapBytes = 56, 0; want 0, 0` | U |
+| 2 | 1794842855249088448 | `TestBlockedTapDetached` | 31.99 s | `tap_test.go:294: the bulk agent did not say it was ready within 30s` | A, F7 |
+| 2 | 1794842855249088448 | `TestCallersPdeathsigKept` | 0.91 s | `pdeathsig_test.go:48: Close = agentproc: agent terminated` | A |
+| 2 | 1794842855249088448 | `TestCloseReadsTheAgentsLastOutput` | 6.58 s | `tap_test.go:398: Close = agentproc: agent terminated: signal: terminated, want nil: the agent exits of itself` | A |
+| 3 | 1794842976527828494 | `TestInProcessDetachedTapIsPrefix` | 40.73 s | `inprocess_test.go:461: the connection did not read Serve's first 56 MiB within 30s` | A, F7 |
+| 3 | 1794842976527828494 | `TestCloseLadder/exits_on_SIGTERM` | 1.35 s | `agentproc_test.go:210: Close = agentproc: agent terminated: exit status 3 after 1.013400313s, want ErrTerminated with exit status 3 between one and two graces` | B |
+| 3 | 1794842976527828494 | `TestCloseLadder/exits_at_its_input's_end` | 0.87 s | `agentproc_test.go:195: Close = agentproc: agent terminated after 447.150099ms, want nil within the grace, 300ms` | A |
+| 3 | 1794842976527828494 | `TestDescendantsEnded/the_agent_exits_at_its_input's_end` | 2.20 s | `ties_test.go:56: Close = agentproc: agent terminated, want nil` | A |
+| 3 | 1794842976527828494 | `TestCloseContextBoundsHandlers/a_child,_CloseContext` | 5.24 s | `closecontext_test.go:150: CloseContext = context deadline exceeded; agentproc: agent killed after 855.162553ms, want the bound's cause and acp.ErrHandlersRunning; closecontext_test.go:156: Wait took longer than 3s` | A |
+| 4 | 1794843102361850269 | `TestInProcessDetachedTapIsPrefix` | 41.49 s | `inprocess_test.go:461: the connection did not read Serve's first 56 MiB within 30s` | A, F7 |
+| 5 | 1794843224957491326 | `TestInProcessDetachedTapIsPrefix` | 42.05 s | `inprocess_test.go:461: the connection did not read Serve's first 56 MiB within 30s` | A, F7 |
+| 5 | 1794843224957491326 | `TestTapErrorIgnored` | 4.28 s | `tap_test.go:256: Wait took longer than 3s` | A, F7 |
+| 5 | 1794843224957491326 | `TestLineTapAsOutputTap` | 1.94 s | `linetap_test.go:153: Close = agentproc: agent terminated` | A |
+| 5 | 1794843224957491326 | `TestNoLostOutput` | 4.56 s | `agentproc_test.go:174: Wait took longer than 3s` | A |
+
+By class: 8 failures of class A or B tests that are not F7's; 7 of F7's four tests; 1 of an unclear test. None of a class C or D test.
+
+**F7's tests, counted apart** (run in all five rounds, none skipped): `TestDetachedTapIsPrefix` failed in 1 of 5 (round 1,
+"Close = agentproc: agent terminated: signal: terminated", `tap_test.go:349`, not F7's "did not say it was ready within 30s");
+`TestInProcessDetachedTapIsPrefix` in 3 of 5 (rounds 3, 4, 5, "the connection did not read Serve's first 56 MiB within 30s",
+`inprocess_test.go:461`); `TestBlockedTapDetached` in 2 of 5 (rounds 1, 2, "the bulk agent did not say it was ready within 30s",
+`tap_test.go:294`); `TestTapErrorIgnored` in 1 of 5 (round 5, "Wait took longer than 3s", `tap_test.go:256`).
+
+#### Findings
+
+1. **Seven tests the rule does not decide** (class "unclear"), of three kinds. What makes each so is in the table's "why" cell.
+   * Kill's abandonment wait, M6, which the rule's A and B do not name, with no step waited out: `TestInProcessKillAtOnce`
+     (`inprocess_test.go:177`, 5 s), and `TestWaitErrorSaysTheCauseOnce/Kill,_Serve_returning_its_cause` (`inprocess_test.go:227`,
+     `testGrace`). B's shape without the waits.
+   * A context bound equal to `testGrace` that decides whether `acp.ErrHandlersRunning` is joined (`agentproc.go:644`), with no exit
+     needing to be seen in a step: `TestCloseContextBoundsHandlers/in_process,_KillContext` (`closecontext_test.go:142`, assertion
+     `:149`) and `TestCloseContextCause` (`:242`, assertion `:249`), both `testGrace`.
+   * The tap drain, M5, within a grace, which is no exit: `TestInProcessTaps` (`inprocess_test.go:333`, 5 s), `TestOutputTapVerbatim`
+     (`tap_test.go:215`) and `TestInputTapSeesWrites` (`:229`), both at `slack`. `TestOutputTapVerbatim` failed in round 1 (finding 3).
+   * The three at `testGrace`, `TestCloseContextBoundsHandlers/in_process,_KillContext`, `TestCloseContextCause` and
+     `TestWaitErrorSaysTheCauseOnce/Kill,_Serve_returning_its_cause`, need a ruling before phase 2 moves or leaves them.
+     Recommended: read A as "the exit, the drain or the
+     return seen within the first grace-bound wait the call makes" and move them, since a longer grace and a bound stated in graces
+     move each of their failures; the four at `slack` or more stay as they are either way.
+2. **A tests that fail for what a grace does not move.** `TestNoLostOutput` (A, moves) failed in round 5 "Wait took longer than 3s"
+   (`agentproc_test.go:174`), the absolute `within(t, slack, …)` that F7's `TestTapErrorIgnored` (A, moves) failed in the same
+   round with the same message (`tap_test.go:256`); both burst 1000 updates through the connection beside the load. Moving them to
+   `exitGrace` leaves `within(t, slack, …)`, 3 s, unchanged ("assertion unchanged"), so phase 2's A/B under this load ("0 of 10
+   amended") cannot be expected of these two: they fail amended as they do at `HEAD`. "Where the race gates run" counts
+   `TestTapErrorIgnored` apart under this load, and does not name `TestNoLostOutput`, which has the same failure. Resolutions
+   that leave the tree correct: judge `TestNoLostOutput` with F7's tests in phase 2 and phase 4, by a record amendment the owner
+   approves (cost: an amendment); or have phase 5's REPORT measure the burst tests as it measures the 56 MiB ones (cost: scope);
+   doing nothing leaves phase 2's A/B unable to pass for these two.
+3. **Tests that failed at a grace already at or above `slack`, which phase 2 does not change:** `TestCloseReadsTheAgentsLastOutput`
+   (A, 5 s), round 2, "Close = agentproc: agent terminated: signal: terminated, want nil" (`tap_test.go:398`): the agent's exit follows
+   the connection's read of 2 MiB through a 5 ms read hook, a throughput as F7's, which a longer grace helps only until the
+   throughput falls further (read, not measured); `TestDetachedTapIsPrefix` and `TestInProcessDetachedTapIsPrefix`, F7's, at 5 s.
+   `TestOutputTapVerbatim` (unclear, `slack`) failed in round 1: "the output tap received 2031616 bytes, want the agent's 2097208"
+   and "DroppedTapBytes = 56, 0": 2031616 is 31 times 65536, the 56 counted dropped are, by size, the stream's last bytes, and the
+   missing 65536 are consistent with the write in flight when the 3 s drain ended, which `tap.go:76` does not count as dropped
+   (read from the figures; the in-flight write was not observed). The tap writes with
+   1 ms a call (`capture{delay: time.Millisecond}`, `tap_test.go:194`), so under this load a write took on the order of 100 ms
+   (3 s over 31 writes; not measured). It is the kind of failure a grace moves, but it is at `slack`: the MADR's "about five times
+   the worst measured" does not hold for a tap drain under this load.
+4. **Twelve A tests have no M1 in their outcome**, only M3 (and M4, M5): the exit is of itself, so no step is waited, and the grace
+   enters through `WaitDelay`, half of it. The client-side plant of phase 2 (a sleep after `Cmd.Wait`) delays the exit's being seen
+   and cannot fail them, since nothing is signalled and `Wait` returns nil; those tests need a plant of their own for "fails at
+   `HEAD`, passes amended", such as a standard-error copy that outlives `WaitDelay`. They are `TestNoLostOutput`,
+   `TestEscapedDescendantDoesNotHoldWait`, `TestTapKeepsCloseEnding`, `TestDescendantsEnded/the_agent_exits_of_itself`,
+   `TestExitedFirst/the_agent_exits_first`, `TestKillAfterExit`, `TestTapErrorIgnored`, `TestProcessWaitContext/the_agent_ends_first`,
+   `TestStderrTailOfFailedAgent`, `TestStderrTailNotJoined`, `TestCloseContextBoundsHandlers/a_child,_KillContext` and
+   `TestCloseContextNotHandlers`. By reading; not run. `TestDescendantsEnded/the_agent_exits_of_itself`' failure through `WaitDelay`
+   is the MADR's F6 (`ties_test.go:84`); none of the twelve failed through M3 in these five rounds.
+5. **Bounds that move with the grace.** `TestCloseContextBoundsHandlers`, `TestCloseContextJoinsTheAgentsError` and the rows that
+   follow state a bound of `testGrace`, which hurries Close's steps at its end (`agentproc.go:594`): `const bound = testGrace`
+   (`closecontext_test.go:145`, `:214`) and the two `ctx` timeouts (`:180`, `:246`). A grace alone does not move them. In round
+   3, `TestCloseContextBoundsHandlers/a_child,_CloseContext` failed so: its error held the bound's cause and "agentproc: agent killed", after
+   855.162553 ms, and no `acp.ErrHandlersRunning` (`closecontext_test.go:150`); the agent was not seen to exit before the bound.
+6. **The load covers part of each round, at random.** `TestZZBurn` takes one of the two parallel slots (`GOMAXPROCS=2` makes
+   `-test.parallel` 2) for 60 s, in a shuffled position; a round took about 105 to 109 s, so tests that ran after it ended, or before it
+   started, ran unloaded. "Not seen to fail" for a test is therefore weaker than 5 loaded runs. The rounds were not repeated with
+   a longer `BURN_FOR`, which the phase did not ask for.
+7. **The rule and the PLAN say nothing of tests already at `slack` or more** (9 of the A and B tests, and 4 unclear ones): phase 2's step 3
+   names "each other class A and B test" and says to give it its grace; for those it would lower it. The table says "no", and the
+   coordinator's brief for phase 2 should say they stay.
+
+No finding is a deviation: every failure of step 3 is a class A or B test, an F7 test counted apart, or a named finding above, and
+no class C or D test failed.
+
+#### Not verified
+
+* Class by reading, not by instrumentation: which wait (M1 to M6) decided each failure was read from its message and the code, not
+  measured. The failures above agree with the reading in each case
+  (a failing `Close`, "agent terminated", for A; the SIGTERM test's `Close` taking 1.013 s against its window of 0.3 to 0.6 s for B),
+  none contradicts it, and the 33 A and B tests that did not fail are neither confirmed nor shown wrong by it.
+* The Windows-only rows (7, one a container, 3 of the leaves A) and the platform branch of `TestCloseLadder/exits_on_SIGTERM` that takes `:203` were not
+  run; their build was checked by `GOOS=windows go vet` only. FreeBSD likewise.
+* The plants and breaks of phase 2, the A/B, and the 20 rounds of phase 4 were not run; the claim in finding 4 about the client-side
+  plant is from reading `watch` and `Wait`.
+* How the 5 rounds' load divided in time (finding 6), and the cost of a goroutine's wake-up under it (finding 3), were not measured.
+* No test of this repository outside `agentproc` was read or run.
+
+#### Files
+
+Touched: this PLAN (this entry) and `docs/README.md` (the PLAN's row). Not touched: any test or source file, any workflow. Scratch
+only, not staged: the enumerating program, the table and its check, the failure parser, `TestZZBurn`, `chunk.sh` and the rounds'
+output.
+
+#### Checks, and staging
+
+After the last edit, with the PLAN and `docs/README.md` staged: `python3 -B scripts/check_records.py --check-all`,
+`python3 -B scripts/check_disclosure.py` and `markdownlint-cli2` v0.23.2, each exit 0, as the coordinator's brief for this phase asks. Staged, not
+committed, not pushed.
