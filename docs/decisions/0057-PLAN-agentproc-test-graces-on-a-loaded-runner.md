@@ -327,6 +327,10 @@ on each host, in chunks of a few minutes; experiments in scratch copies (`git ar
      decision's "never read their megabytes at once" covers), and the same rounds are run again.
    * If a first step still exceeds 5 s with the lock held through `Close`, stop: the coordinator puts it to the owner. The 5 s
      grace is not raised in this phase.
+   *Annotated 2026-11-17:* the second bullet applies, by the owner's ruling, relayed by the coordinator, "Measure a longer series first"
+   (4 of 100 module rounds failed `Close`'s first step with the lock released at "ready"); it is built and proved in "2026-11-17: phase 6,
+   the alternate branch (the lock held through `Close`)", below; the first bullet's rule, "the lock ends at 'ready'", does not stand
+   for the two 56 MiB tests.
 3. **The lock** (in the tree, test files only). A package-level `sync.Mutex` in `agentproc/tap_test.go` and a helper, for example
    `bulkTurn(t) (done func())`, which takes it, registers `done` with `t.Cleanup` through a `sync.OnceFunc` so that a test that
    fails or ends early releases it, and returns `done`. Each of the four calls it after its `t.Parallel()` (so the sequential phase
@@ -2768,3 +2772,328 @@ sizes stand as phase 6 committed them. `date +%F` printed 2026-11-17; the times 
 
 Files: this entry, and the MADR's note below it. Scratch only: the stamped copy, its scripts, the chunks' outputs and the
 recovered `C08` files (`<scratch>`). Staged, not committed, not pushed. The plan's status is not set by this entry.
+
+*Added 2026-11-17, a correction:* this entry's first-step table (the minimum, the "0.0" bin and its reading, the counts over 4.0 s, the
+medians and the overlap counts) carries a pairing fault, found later; the failures and the counts over 5 s stand. The corrected
+figures, the planted case and the raw-stamp check are in "2026-11-17: phase 6, the alternate branch (the lock held through `Close`)",
+section "Correction to the 100-round series' first-step table".
+
+### 2026-11-17: phase 6, the alternate branch (the lock held through `Close`)
+
+Run by a mainstream-tier model at high effort, as phase 6 prices it, on the coordinator's brief; stopped once by a usage limit and
+resumed on the coordinator's message, the background chains having kept running through the stop (no chunk was cut short; see "The
+chunks"). Base commit `1575f03`, `main`, level with `origin/main`, tree clean at the start. The change is in `agentproc`'s test files
+only; the docs it names and the records change with it; no source, workflow, script or tool, and no assertion, bound, grace or data
+size. `date +%F` printed 2026-11-17; the times below are UTC.
+
+* **The ruling.** The owner's ruling, relayed by the coordinator, "Measure a longer series first", whose series (the entry above,
+  "2026-11-17: phase 6, step 2 again") found the first step of `Close` over its 5 s grace in 5 of 200 first steps and failing the test in 4
+  of 100 module rounds. By that ruling and by step 2's second bullet, the alternate branch applies: "the lock is held through `Close`'s
+  return for the two 56 MiB tests". The 5 s grace is not raised. This entry builds that branch and runs its proof.
+* **Read:** this PLAN (phase 6, step 2 and its alternate branch, the proof, the breaks, the docs, the confirmation, the stops; its
+  phase 6 record; the entry "2026-11-17: phase 6, step 2 again"), the MADR's amendments of 2026-11-16 and 2026-11-17, the report's
+  account of what the two 56 MiB tests read after "ready", `agentproc/tap_test.go`, `inprocess_test.go`, `agentproc_test.go`,
+  `agentproc/tap.go`'s `tapReader` and `agentproc.go`'s `stop`, and the skills `available-dev-hosts` and `madr-and-plan-writing`.
+
+#### The change
+
+Test files only (`git diff --numstat`: 29 insertions and 15 deletions in the three test files, 8 and 3 in the two docs).
+
+* `agentproc/tap_test.go:420`: `TestDetachedTapIsPrefix` calls `done()` after `p.Close()` has returned and its error been checked,
+  where `done()` was called after `awaitReady` (`:395` at `1575f03`). `agentproc/inprocess_test.go:488`: `TestInProcessDetachedTapIsPrefix`
+  calls `done()` after its `p.Close()`, where it was called once `wrote` was closed (`:474`). Nothing between "ready" and `Close` moved:
+  the detach wait, the tap's release and the notification are inside the lock now.
+* `bulkTurn`'s `t.Cleanup(done)` is untouched and is the backstop: a test that fails or ends early releases the lock, and `done` is a
+  `sync.OnceFunc`. The cleanups run last-in first-out, so a failing 56 MiB test's `Close` cleanup runs before the release.
+* `TestBlockedTapDetached` (`tap_test.go:358`) and `TestTapDrainBoundedByGrace` (`:493`) are unchanged: `done()` once "ready". Read from
+  the code: both agents are started with `bulkMoreEnv=0` and write nothing after their line of input, so after "ready" the connection
+  has at most a pipe's remainder (the agent's write returns when all but a pipe's 64 KiB are read) and the last line's decode to do;
+  their `Close` waits for the exit, for the watcher's read to the end (nothing left) and for the drain of a tap that stays blocked, up to
+  `exitGrace`. No megabytes are read in a step with a grace after "ready", and the stamps agree (below): the tails, "ready" to `Close`'s
+  return, were 3.08 to 3.82 s in 200 runs, which is that timer. The ruling names the two 56 MiB tests; no stop arises.
+* Comments: `bulkLock` and `bulkTurn` (`tap_test.go:186` to `:220`), the two tests' doc comments (`tap_test.go:389`, `inprocess_test.go:436`)
+  and `readyWait` (`agentproc_test.go:54` to `:63`) say the lock is held through `Close` for the two 56 MiB tests and why.
+
+#### The reading windows, from the code, and what the stamps say
+
+What each test has the connection read, and when. A test's "window" is the span in which the connection is reading its megabytes.
+
+| Test | Megabytes | Window at `1575f03` (lock released at "ready") | Window now |
+| :--- | :--- | :--- | :--- |
+| `TestBlockedTapDetached` | 48 MiB before "ready" | lock taken, to "ready"; then the pipe's remainder and the last line's decode; `Close` reads nothing | the same |
+| `TestTapDrainBoundedByGrace` | 24 MiB before "ready" | the same | the same |
+| `TestDetachedTapIsPrefix` | 56 MiB before "ready", 8 MiB after `go` | the lock covers the 56 MiB, from taking it to "ready"; the 8 MiB are read in `Close`'s first step (5 s grace), **outside the lock** | the lock covers all of it, from taking it to `Close`'s return: the 56 MiB, the detach wait and the 8 MiB |
+| `TestInProcessDetachedTapIsPrefix` | 56 MiB, then 8 MiB | the same, through an `io.Pipe` (a `Write` returns when its reader has read all of it) | the same as the row above |
+
+The first step of a 56 MiB test's `Close` ends when the agent has exited, which needs its last `Write` to return, which needs the
+connection to have read the 8 MiB (all but a pipe's 64 KiB for a child). So the first step is the connection's reading of the 8 MiB,
+bounded by 5 s. At `1575f03` the next test to take the lock (any of the other three, waiting in `bulkTurn`) started its agent and read
+its own megabytes during that step, one other reader at a time, the series' finding. With the change a waiting test cannot start
+before `Close` has returned, so, among the four:
+
+* **Cannot overlap any more:** another of the four reading its megabytes (a lock window, or the other 56 MiB test's `Close`) during a
+  56 MiB test's `Close`. Measured on the stamps: in 100 module rounds and 20 package rounds, 0 of 200 and 0 of 40 first steps had another
+  bulk test's lock window or `Close` overlapping them, and the lock was released 1.6 ms at most after `Close` returned. The judge that counts it was seen to detect the overlaps: run on the 100-round series at `1575f03` (below) it finds one in 145
+  of 200 first steps and in all 36 over 4.0 s.
+* **Can still overlap, and reads no megabytes:** the tails of `TestBlockedTapDetached` and `TestTapDrainBoundedByGrace` after they
+  release, 3.1 to 3.8 s of `Close` waiting out a blocked tap's grace; they can run beside the next holder's reading to "ready" (a hand-over,
+  by design) and, if that reader's own read took under about 3.5 s, beside its `Close`. The stamps found 0 of 200 first steps with a
+  tail overlapping them in the Linux series and 0 of 40 on the Windows laptop. The tail of the 56 MiB test that released (`Close` returned,
+  then the comparison of two 56 MiB buffers) reads nothing from the connection.
+* **Can still overlap, and is not serialised by this lock:** everything that is not one of the four: `agentproc`'s other tests (the
+  smaller taps, the 2 MiB and 1 MiB streams) and, in the module run, the other packages' tests and the host's other work. They are the
+  residual load. The series shows it: four first steps over 4.0 s (4.519, 4.414, 4.204 and 4.122 s) with no bulk test overlapping
+  any of them; at `1575f03`'s lock every one of the 36 over 4.0 s had one. Which other work slowed them was not isolated.
+
+#### The chunks
+
+The Linux series: the stamped copy of `1575f03` plus the change (the same stamps as the 100-round series, `mk_stamps.py`, and two more,
+`tail_close_call` and `tail_close_return` around `Close` in `TestBlockedTapDetached` and `TestTapDrainBoundedByGrace`), the root
+module as CI's step runs it, `go test -race -shuffle=SEED -count=1 ./...` with the round's own `SEED`, 10 rounds a chunk, on the host as
+it is (4 CPUs, Go 1.27.4), through `run-on-host --need linux --race`, one at a time through the queue, never a WSL distro; the host-side
+script writes its own output, stamps and per-round outputs. `cmd/generate` was not part of the series (the stamps are in the root
+module); the confirmation ran it. The Windows rounds: the same stamped copy, the whole package, `-race`, `-shuffle=SEED`, through
+`run-on-host --need windows --race -- sh -c '<command>'`. "Seconds" is the dispatcher's, queue wait included. Every chunk is in the
+table; none was re-run to replace a result and none was lost.
+
+| Chunk | Host | What | Rounds | Seeds | Start (UTC) | Seconds | Queue wait | Exit | Failed tests |
+| :--- | :--- | :--- | ---: | :--- | :--- | ---: | ---: | :--- | :--- |
+| `L01` | the Linux host | root module, `go test -race -shuffle=SEED -count=1 ./...`, stamped, the lock held through `Close` | 10 | 1794936889794516, 1794937017794901, 1794937111795184, 1794937212795488, 1794937302795759, 1794937389796021, 1794937478796289, 1794937570796566, 1794937659796834, 1794937744797090 | 2026-11-17 16:04:59 | 949 | 0s | 0 | none |
+| `L02` | the Linux host | root module, `go test -race -shuffle=SEED -count=1 ./...`, stamped, the lock held through `Close` | 10 | 1794938125798224, 1794938254798612, 1794938347798892, 1794938436799160, 1794938522799419, 1794938611799687, 1794938697799946, 1794938783800205, 1794938868800461, 1794938954800720 | 2026-11-17 16:14:35 | 1585 | 660s | 0 | none |
+| `L03` | the Linux host | root module, `go test -race -shuffle=SEED -count=1 ./...`, stamped, the lock held through `Close` | 10 | 1794939635802754, 1794939747803091, 1794939829803338, 1794939916803600, 1794940002803859, 1794940090804124, 1794940177804386, 1794940272804672, 1794940361804940, 1794940450805208 | 2026-11-17 16:41:00 | 1499 | 586s | 0 | none |
+| `L04` | the Linux host | root module, `go test -race -shuffle=SEED -count=1 ./...`, stamped, the lock held through `Close` | 10 | 1794940832806345, 1794940960806730, 1794941063807040, 1794941163807341, 1794941260807633, 1794941354807916, 1794941440808175, 1794941522808422, 1794941603808666, 1794941690808928 | 2026-11-17 17:05:59 | 1233 | 284s | 0 | none |
+| `L05` | the Linux host | root module, `go test -race -shuffle=SEED -count=1 ./...`, stamped, the lock held through `Close` | 10 | 1794942070810059, 1794942176810378, 1794942260810631, 1794942345810887, 1794942429811140, 1794942513811393, 1794942599811652, 1794942684811908, 1794942769812164, 1794942862812444 | 2026-11-17 17:26:32 | 1183 | 288s | 0 | none |
+| `L06` | the Linux host | root module, `go test -race -shuffle=SEED -count=1 ./...`, stamped, the lock held through `Close` | 10 | 1794943261813632, 1794943386814008, 1794943478814285, 1794943562814538, 1794943648814797, 1794943732815050, 1794943829815342, 1794943925815631, 1794944015815902, 1794944110816188 | 2026-11-17 17:46:15 | 1245 | 296s | 0 | none |
+| `L07` | the Linux host | root module, `go test -race -shuffle=SEED -count=1 ./...`, stamped, the lock held through `Close` | 10 | 1794944523817418, 1794944634817752, 1794944731818044, 1794944829818339, 1794944922818619, 1794945014818896, 1794945106819173, 1794945186819414, 1794945270819667, 1794945363819947 | 2026-11-17 18:07:00 | 1249 | 314s | 0 | none |
+| `L08` | the Linux host | root module, `go test -race -shuffle=SEED -count=1 ./...`, stamped, the lock held through `Close` | 10 | 1794945768821153, 1794945880821490, 1794945968821755, 1794946050822002, 1794946135822258, 1794946223822523, 1794946308822779, 1794946407823077, 1794946503823366, 1794946599823655 | 2026-11-17 18:27:49 | 1247 | 308s | 0 | none |
+| `L09` | the Linux host | root module, `go test -race -shuffle=SEED -count=1 ./...`, stamped, the lock held through `Close` | 10 | 1794947147825290, 1794947248825594, 1794947331825844, 1794947418826106, 1794947505826368, 1794947589826621, 1794947672826871, 1794947760827136, 1794947843827386, 1794947928827642 | 2026-11-17 18:48:36 | 1315 | 442s | 0 | none |
+| `L10` | the Linux host | root module, `go test -race -shuffle=SEED -count=1 ./...`, stamped, the lock held through `Close` | 10 | 1794949065831044, 1794949179831387, 1794949265831646, 1794949350831902, 1794949436832161, 1794949523832423, 1794949606832673, 1794949688832920, 1794949770833167, 1794949856833426 | 2026-11-17 19:10:31 | 1928 | 1045s | 0 | none |
+| `W01` | the Windows laptop | whole package, `-race`, `-shuffle=SEED -count=1`, stamped, the lock held through `Close` | 10 | 1794936900794549, 1794936951794703, 1794937002794857, 1794937053795011, 1794937102795159, 1794937154795316, 1794937205795470, 1794937256795624, 1794937307795778, 1794937360795938 | 2026-11-17 16:05:00 | 529 | 0s | 0 | none |
+| `W02` | the Windows laptop | whole package, `-race`, `-shuffle=SEED -count=1`, stamped, the lock held through `Close` | 10 | 1794937474796271, 1794937526796428, 1794937575796576, 1794937628796736, 1794937681796896, 1794937730797044, 1794937779797192, 1794937828797340, 1794937876797485, 1794937925797633 | 2026-11-17 16:14:36 | 517 | 0s | 0 | none |
+| `Bhead` | the Linux host | break: `HEAD`'s lock plus the hog plant, 5 times each of the two tests, `-race` | 10 | - | 2026-11-17 16:08:37 | 1022 | 726s | 0 of 10 runs exit 0, 10 exit 1 | `TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix` |
+| `Bamend` | the Linux host | break: the amended lock plus the hog plant, 5 times each of the two tests, `-race` | 10 | - | 2026-11-17 16:25:39 | 1235 | 915s | 10 of 10 runs exit 0, 0 exit 1 | none |
+| `CL-pkg1` | the Linux host | confirmation: `go test -race -shuffle=on -count=5 -v -timeout=30m ./agentproc/`, the amended tree, unstamped | 5 | `-test.shuffle` in the host's output | 2026-11-17 16:28:13 | 1358 | 1077s | 0 | none |
+| `CL-pkg2` | the Linux host | confirmation: `go test -race -shuffle=on -count=5 -v -timeout=30m ./agentproc/`, the amended tree, unstamped | 5 | `-test.shuffle` in the host's output | 2026-11-17 16:50:51 | 1196 | 903s | 0 | none |
+| `CL-pkg3` | the Linux host | confirmation: `go test -race -shuffle=on -count=5 -v -timeout=30m ./agentproc/`, the amended tree, unstamped | 5 | `-test.shuffle` in the host's output | 2026-11-17 17:10:47 | 1237 | 941s | 0 | none |
+| `CL-pkg4` | the Linux host | confirmation: `go test -race -shuffle=on -count=5 -v -timeout=30m ./agentproc/`, the amended tree, unstamped | 5 | `-test.shuffle` in the host's output | 2026-11-17 17:31:24 | 1191 | 887s | 0 | none |
+| `CL-mod1` | the Linux host | confirmation: CI's step, root then `cmd/generate`, `-race -shuffle=on -v`, the amended tree, unstamped | 1 | `-test.shuffle` in the host's output | 2026-11-17 17:51:16 | 1263 | 941s | 0+0 | none |
+| `CL-mod2` | the Linux host | confirmation: CI's step, root then `cmd/generate`, `-race -shuffle=on -v`, the amended tree, unstamped | 1 | `-test.shuffle` in the host's output | 2026-11-17 18:12:19 | 1244 | 925s | 0+0 | none |
+| `CL-mod3` | the Linux host | confirmation: CI's step, root then `cmd/generate`, `-race -shuffle=on -v`, the amended tree, unstamped | 1 | `-test.shuffle` in the host's output | 2026-11-17 18:33:03 | 1239 | 929s | 0+0 | none |
+| `mac-mod-1` | this Mac | `go test -race -shuffle=on ./...` in the working tree, through `run-heavy`, 1 round | 1 | - | 2026-11-17 16:30:57 | 29 | 0s | 0 | none |
+| `mac-mod-2` | this Mac | `go test -race -shuffle=on ./...` in the working tree, through `run-heavy`, 1 round | 1 | - | 2026-11-17 16:31:26 | 25 | 0s | 0 | none |
+| `mac-mod-3` | this Mac | `go test -race -shuffle=on ./...` in the working tree, through `run-heavy`, 1 round | 1 | - | 2026-11-17 16:31:52 | 25 | 0s | 0 | none |
+
+* **The stop condition did not arise:** no round failed; no first step of the two 56 MiB tests ended without the exit seen; none
+  exceeded 5 s (the longest, 4.519 s); no wait to "ready" exceeded 30 s.
+* **The driver's faults (a tool fault, recorded so that no result rests on an unexplained step).** The chain driver's stop check
+  (`chain2.py`) looked at the first step of every `Process` in a chunk's stamps, not only the two 56 MiB tests'; in a module or package
+  round the class B tests end first steps without the exit seen by design, so it reported a stop for `W01` (10 rounds, exit 0, every
+  test passed) and would have for `L01`. It also read the stamps by `Process` address, the fault corrected below. Killed: the
+  Linux chain's driver process while `L01` ran, not its `chunk.py` child, which went on and wrote `L01`'s status (exit 0); the two
+  files the Windows driver had written, `STOP-windows` and `STOPPED-W01.txt`, which held only that false reason, were removed. Kept
+  running: `L01`, and `L02`, submitted and queued while it ran. Started: `chain3.py`, the check limited to the two tests' `Process`
+  (found by their `close_call` stamp) for `L02` to `L10` and `W02`. `L01` and `W01` were judged by `judge.py` like every chunk, from
+  the output and status files, which do not depend on the driver's check; the break chunks were run by `chunk.py` directly so
+  that their expected failures would not stop the chain.
+* **A usage-limit stop in the middle.** The brief's agent was stopped while `L06` and `CL-pkg4` were queued and resumed on the
+  coordinator's message; the driver processes and the queue were unaffected, `L01` to `L05` had finished and no chunk was cut short.
+
+#### The first step, with the lock held through `Close`
+
+From `input_closed` to `step1_end` of `Process.stop`, for each of the two tests, over the 100 module rounds (`L01` to `L10`), by the
+corrected pairing ("Correction", below); beside it the committed series at `1575f03`, also by the corrected pairing, over its 100
+delivered rounds:
+
+Half-second bins, the number of rounds in each (a bin not listed is empty), with the lock held through `Close`:
+
+| Bin, s | 1.5 | 2.0 | 2.5 | 3.0 | 3.5 | 4.0 | 4.5 |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `TestDetachedTapIsPrefix` | 49 | 19 | 17 | 11 | 2 | 1 | 1 |
+| `TestInProcessDetachedTapIsPrefix` | 41 | 28 | 18 | 8 | 3 | 2 | 0 |
+
+| 100 module rounds, `-race`, the Linux host | Test | Min | Median | p90 | p95 | p99 | Max | Over 4.0 s | Over 4.5 s | Over 5.0 s | Exit not seen |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| the lock released at "ready" (`1575f03`, corrected pairing) | `TestDetachedTapIsPrefix` | 1.621 | 2.63 | 4.16 | 4.51 | 5.00 | 5.001 | 15 | 6 | 3 | 3 |
+| the lock released at "ready" (`1575f03`, corrected pairing) | `TestInProcessDetachedTapIsPrefix` | 1.633 | 2.87 | 4.25 | 4.62 | 5.00 | 5.004 | 21 | 7 | 2 | 1 |
+| the lock held through `Close` | `TestDetachedTapIsPrefix` | 1.548 | 2.01 | 3.17 | 3.36 | 4.42 | 4.519 | 2 | 1 | 0 | 0 |
+| the lock held through `Close` | `TestInProcessDetachedTapIsPrefix` | 1.552 | 2.11 | 3.09 | 3.37 | 4.12 | 4.204 | 2 | 0 | 0 | 0 |
+
+* **What it shows.** 0 failures in 100 rounds; no first step over 5 s; the longest 4.519 s (`L05`, round 9, seed 1794942769812164), a margin
+  of 0.48 s; first steps over 4.0 s fell from 36 of 200 to 4 of 200,
+  the median from 2.63 and 2.87 s to 2.01 and 2.11 s. `Close`'s total, 2.17 s median and 4.80 s at most for `TestDetachedTapIsPrefix`,
+  2.35 s and 4.54 s for `TestInProcessDetachedTapIsPrefix`.
+* **What N excludes.** 0 failures in 100 rounds excludes, at the one-sided 95 % level, a failure rate above 2.95 % (1 minus 0.05 to
+  the power of 1/100); it does not exclude a rate below that. The rate at `1575f03`, 4 in 100, would give 0 in 100 in 1.7 % of series;
+  its lower 95 % bound, 1.4 %, in 24 %. The Windows laptop's 20 rounds exclude nothing above about 14 % (3 over 20) and are a pass,
+  not a rate. The tail is observed to 4.52 s of the 5 s: a rate under 1 in 34 of a step over 5 s is not excluded, and the four steps
+  over 4.0 s had no bulk test beside them, so what remains is the host's other load, which this lock does not serialise.
+
+#### The break
+
+One thing is shown: that holding the lock through `Close` matters. The evidence at `1575f03`'s lock is the series' own: 4 of 100
+rounds failed at `Close`'s first step (the entry above; the four failures and the fifth step over 5 s are confirmed from the raw
+stamps below). On top of that, a plant that makes the overlap certain, in scratch copies only (`mk_plant.py`): a scratch test,
+`TestZZHog`, takes no lock and, when a 56 MiB test releases `bulkLock`, starts 64 busy goroutines for 15 s (`ZZ_HOG_N=64`,
+`ZZ_HOG_SEC=15`, fixed before the first run and not changed): the next bulk test reading, made heavy and made certain, at the
+instant the lock is released. Two scratch trees differ only by the change: `HEAD`'s lock (released at "ready"), and the amended lock
+(after `Close`). Each ran each 56 MiB test alone with the hog (`-test.run '^(Test...|TestZZHog)$'`), 5 times, `-race`, on the Linux
+host (chunks `Bhead` and `Bamend`; the same stamps).
+
+| The lock | Test | Runs | Failed | First step: min / max, s | Exit not seen | Failure message | Test time, s |
+| :--- | :--- | ---: | ---: | :--- | ---: | :--- | :--- |
+| released at "ready" | `TestDetachedTapIsPrefix` | 5 | 5 | 5.002 / 5.010 | 5 | `Close = agentproc: agent terminated: signal: terminated` | 17.0 to 19.5 |
+| released at "ready" | `TestInProcessDetachedTapIsPrefix` | 5 | 5 | 5.006 / 5.019 | 5 | `Close = agentproc: agent killed: io: read/write on closed pipe` | 22.9 to 27.0 |
+| held through `Close` | `TestDetachedTapIsPrefix` | 5 | 0 | 2.217 / 2.347 | 0 | - | 28.7 to 29.8 |
+| held through `Close` | `TestInProcessDetachedTapIsPrefix` | 5 | 0 | 1.702 / 1.825 | 0 | - | 13.4 to 14.4 |
+
+Without the change the first step ends at its 5 s grace with the exit unseen in 10 of 10 runs, as in the series' four failures, and
+`Close` fails; with it the same plant leaves the first step at 1.7 to 2.3 s in 10 of 10 (the hog starts after `Close` has returned; it lengthens
+the test's time, which is why that column is longer, by slowing the comparison of 56 MiB buffers after `Close`). Before dispatch a one-run smoke on this Mac without `-race` (10 CPUs) failed `TestDetachedTapIsPrefix` on `HEAD`'s lock
+(`Close = agentproc: agent terminated: signal: terminated`) and passed it on the amended lock, and passed
+`TestInProcessDetachedTapIsPrefix` on `HEAD`'s lock (no race, fast: the plant did not make it fail there); it is not part of the evidence. The plant is a model of "the next reader", not that reader: in the real series the overlapping reader was one bulk test.
+
+#### The Windows laptop
+
+The package under `-race`, 20 rounds, stamped (`W01`, `W02`): every test passed in every round, the four included; no `DATA RACE`, no
+panic. Waits, in seconds (min / median / max), `readyWait` being 30 s, and the same for the 30 runs of phase 6's lock released at "ready":
+
+| Test | Wait to "ready", 20 rounds | Phase 6, 30 runs: median / max | Wait for the lock, 20 rounds: median / max |
+| :--- | :--- | :--- | :--- |
+| `TestBlockedTapDetached` | 8.3 / 8.4 / 17.8 | 9.6 / 17.9 | 26.0 / 38.1 |
+| `TestDetachedTapIsPrefix` | 9.7 / 10.9 / 19.1 | 12.1 / 20.9 | 19.1 / 35.5 |
+| `TestInProcessDetachedTapIsPrefix` | 9.3 / 9.5 / 17.9 | 11.0 / 18.3 | 24.1 / 36.0 |
+| `TestTapDrainBoundedByGrace` | 4.1 / 4.2 / 9.4 | 6.1 / 9.0 | 29.9 / 42.1 |
+
+No wait to "ready" over 30 s (the stop condition); the new maxima are 17.8, 19.1, 17.9 and 9.4 s. Holding the lock through `Close` queues the
+others a little longer for the lock (up to 42.1 s, against phase 6's 41.1 s), which is not a readiness wait. The first steps there were
+1.30 to 2.24 s (`TestDetachedTapIsPrefix`; median 1.32) and 1.34 to 2.71 s (`TestInProcessDetachedTapIsPrefix`; median 1.36), `Close`'s
+total 2.37 and 3.03 s at most; 0 of 20 first steps had another bulk test or a tail overlapping. The package took 48 to 53 s a round,
+50.5 s on average (stamped), against phase 6's 50.0 s (48.4 to 51.4 s, unstamped): no measurable rise there.
+
+#### The confirmation
+
+Phase 6's rounds again with the change, judged like every other test ("Judge them like every other test there": every test, the four
+included, none counted apart; the in-process starved load was not run). The amended tree is a scratch copy of `1575f03` with the three
+test files overlaid (the diff of the tree, checked identical to the working tree's `agentproc/`), unstamped.
+
+* **The Linux host, the package, 20 rounds** (`CL-pkg1` to `CL-pkg4`, `go test -race -shuffle=on -count=5 -v -timeout=30m
+  ./agentproc/`): exit 0 each; 518 passes in each chunk (2,072 in all), 0 failures, 0 skips; each of the four passed in 20 of 20
+  rounds; no `DATA RACE`, no panic. `agentproc`'s time: 266.1, 277.8, 281.7 and 287.4 s for 5 rounds, 53.2 to 57.5 s a round, against
+  phase 6's 241.8 to 247.4 s (48.4 to 49.5 s a round): 4 to 9 s more a round, of which the two `Close`s held in turn (a median of 2.2 and
+  2.4 s each) are about 4.5 s; the rest was not isolated.
+* **The Linux host, the module, 3 rounds as CI's step runs it** (`CL-mod1` to `CL-mod3`): root and `cmd/generate` each exit 0 in each
+  round (117, 112 and 114 s, and 200, 201 and 190 s); no failure, race or panic; each of the four passed in 3 of 3 rounds; `agentproc` took
+  55.6, 59.4 and 58.1 s there, against phase 6's 51.8, 55.2 and 51.8 s.
+* **This Mac's module race gate of record, 3 rounds** (`go test -race -shuffle=on ./...` in the working tree, through `run-heavy`):
+  exit 0 each, 29, 25 and 25 s, started 16:30:57, 16:31:26 and 16:31:52; every package `ok`, none cached; `agentproc` 24.6, 27.7 and
+  24.7 s, against phase 6's 23.8 to 27.8 s.
+* **Every test judged; nothing counted apart.** No test failed on either host in any round. The owner's ruling "Judge them like every
+  other test there" takes effect with this confirmation, as the PLAN says; the starved load stays counted apart and was not run.
+* **No serialised test over 30 s:** the longest wait to "ready" in all the stamped runs with the change was 25.1 s (the Linux host,
+  `TestDetachedTapIsPrefix`, `L01` round 3; 4.9 s under the bound; phase 6's longest there was 20.5 s) and 19.1 s (the Windows laptop).
+  The waits for the lock, which are not in the 30 s, reached 38.9 s on the Linux host (phase 6: 30.9 s) and 42.1 s on the Windows laptop
+  (41.1 s).
+
+#### `tools/gates.py`
+
+All 18 gates exit 0, run as phase 4 and phase 6 ran them, in two parts, each through `run-heavy` on this Mac: the sixteen gates that are
+not the hosts' (`regen`, `precheck`, `newfiles`, `nojsonv2`, `winvet`, `records`, `mdlint`, `idscan`, `tools`, `lint`, `fix`, `tidy`,
+`api`, `race3`, `floor`, `platforms`), "all gates passed", queued 19:47:52Z, started 19:59:00Z after 668 s in the queue behind other
+sessions' runs, ended 20:05:08Z (368 s); then `tools/gates.py linux windows` with the two hosts' SSH aliases in the environment, "all
+gates passed", queued 20:05:08Z, started 20:23:11Z after 1,083 s in the queue, ended 20:26:48Z (217 s). The `linux` gate runs without
+`-race`; its log shows `agentproc` `ok` in 18.2 s and the `windows` gate's in 20.7 s (phase 6: 16.3 s and 20.9 s), so no F7 test failed
+there and there is no F7 deviation. None of my chunks was running on either host then (the chains had ended). The gates ran with this
+entry in the tree, its gates and checks paragraphs not yet written.
+
+#### Correction to the 100-round series' first-step table (entry "2026-11-17: phase 6, step 2 again")
+
+That entry is committed and is not rewritten; this is its correction, found while judging the series above.
+
+* **What was wrong.** The stamps pair a first step by the `Process` address (`%p` in `input_closed` and `step1_end`), and the series' judge
+  took, for a test's `close_call` address, the first `input_closed` and the first `step1_end` that address had in the round. A module
+  round runs about a hundred tests, each with its own `Process`, and the garbage collector reuses an address within a round, so the
+  first pair of an address can be an earlier, short-lived `Process`'s of another test. For 11 of the 100 `TestDetachedTapIsPrefix`
+  first steps and 8 of the 100 `TestInProcessDetachedTapIsPrefix` ones it was: the pair taken was 0.000 to 0.031 s long.
+* **How the corrected judge pairs.** For a test's `close_call` (address `p`, time `t`): the first `input_closed` of `p` at or after `t`,
+  and the first `step1_end` of `p` at or after that `input_closed`. The old pairing is kept in `diffpair.py` beside it, and reproduces
+  the committed table exactly (medians 2.49 and 2.82 s, 12 and 19 over 4.0 s, bins).
+* **A planted case.** A synthetic round in which one address first belongs to an earlier `Process` (first step 0.030 s, exit seen) and
+  is then `TestDetachedTapIsPrefix`'s, whose first step is planted at 4.700 s (exit seen) in round 1 and 5.000 s (exit not seen) in
+  round 2: the old pairing gives 0.030 s for both rounds; the corrected judge gives 4.700 s and 5.000 s, the second with the exit not
+  seen and the test's error (`plant_pairing.py`).
+* **The corrected figures, the 100 delivered rounds, beside the committed:**
+
+| | Test | Min | Median | p90 | p95 | p99 | Max | Over 4.0 s | Over 4.5 s | Over 5.0 s | Exit not seen |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| committed | `TestDetachedTapIsPrefix` | 0.000 | 2.49 | 4.08 | 4.51 | 5.00 | 5.001 | 12 | 6 | 3 | 3 |
+| corrected | `TestDetachedTapIsPrefix` | 1.621 | 2.63 | 4.16 | 4.51 | 5.00 | 5.001 | 15 | 6 | 3 | 3 |
+| committed | `TestInProcessDetachedTapIsPrefix` | 0.000 | 2.82 | 4.25 | 4.62 | 5.00 | 5.004 | 19 | 7 | 2 | 1 |
+| corrected | `TestInProcessDetachedTapIsPrefix` | 1.633 | 2.87 | 4.25 | 4.62 | 5.00 | 5.004 | 21 | 7 | 2 | 1 |
+
+  Corrected histogram (half-second bins, rounds in each; the committed "0.0" bin of 11 and 8 is gone): `TestDetachedTapIsPrefix` 1.5: 21,
+  2.0: 21, 2.5: 21, 3.0: 11, 3.5: 11, 4.0: 9, 4.5: 3, 5.0: 3; `TestInProcessDetachedTapIsPrefix` 1.5: 9, 2.0: 23, 2.5: 21, 3.0: 11,
+  3.5: 15, 4.0: 14, 4.5: 5, 5.0: 2.
+* **What changes in the committed entry:** the minimum (0.000 s; 1.621 and 1.633 s); the reading of the "0.0" bin ("a first step that
+  ended as it began, the agent having exited before its input was closed", and the note "11 and 8 first steps under 0.5 s are the
+  agent having exited before its input was closed, not a stamp fault"): they were mispaired rows, and no agent exited before its input
+  was closed; the counts over 4.0 s (12 and 19 become 15 and 21, 36 of 200 where the entry says 31); the medians and p90 as the table; and the
+  overlap counts ("116 of the 170 under 4.0 s" and "all 32 over 4.0 s"): recounted on the corrected pairing, 66 and 79 of 100 first
+  steps had another of the four in a window, and all 36 over 4.0 s had one (`judge.py` on the series, `out/judge-c100-100.txt`).
+* **What does not change.** The four failed rounds (`C05` round 3, `C05` round 10, `C06` round 4, `C09` round 8), their seeds,
+  messages and times (a failure is the test's own output, not a pairing); the fifth step over 5 s (`C02` round 2); the counts over 4.5 s and
+  5.0 s; the "exit not seen" counts. Each of the five was checked on the raw stamps: its address has one `input_closed` and one
+  `step1_end` in its round, so both pairings give the same step (5.001, 5.004, 5.001, 5.000 and 5.001 s) (`verify5.py`). The number of
+  failures and of first steps over 5 s does not move, and the alternate branch rests on the same facts. The whose-window finding of the
+  five (`TestBlockedTapDetached`, `TestInProcessDetachedTapIsPrefix` twice, `TestTapDrainBoundedByGrace` twice) is the same.
+* The same fault was in this phase's first judge and in the break's and Windows rounds' reading of the first steps until it was found
+  (the first look at `L01` showed a 0.03 s first step for `TestDetachedTapIsPrefix` with another test's window over it); every figure of
+  this entry is by the corrected pairing.
+
+#### The docs
+
+| Where | Fixed |
+| :--- | :--- |
+| `docs/architecture.md:1257` to `:1263` | the sentence on `agentproc`'s checks: the four take `bulkLock` in turn; the two 56 MiB tests hold it until `Close` returns, and why, with the series' 4 of 100 |
+| `CHANGELOG.md:8` to `:16` | the `Unreleased` line for the lock: the two 56 MiB tests hold it until `Close` has returned |
+| `agentproc/tap_test.go:186` to `:220` | `bulkLock`'s and `bulkTurn`'s comments: where each test releases, and why |
+| `agentproc/tap_test.go:389`, `agentproc/inprocess_test.go:436` | the two 56 MiB tests' doc comments |
+| `agentproc/agentproc_test.go:54` to `:63` | `readyWait`'s comment |
+| this PLAN, MADR and `docs/README.md` | dated additions; nothing rewritten |
+
+Searched for statements the change makes false: `docs/`, `README.md`, `CHANGELOG.md`, `AGENTS.md`, `tools/`, `agentproc/`, for "ends at",
+"released at", "releases it", "at ready", "one at a time", "held through" and `bulkLock` / `bulkTurn`. The hits in the records
+(this PLAN's phase 6 text and record, the MADR's amendments, the report) are history of what each decided or saw and stay; the
+statements about the lock's end ("the lock ends at 'ready'", step 2's first bullet) are the branch not taken, annotated at step 2. No
+hit outside the records and the files above states where the lock ends.
+
+#### Not verified
+
+* The failure rate under CI's own load and on CI's runners: the series is one host, with other sessions' runs queued beside it but not
+  on it; the first steps still reach 4.5 s from the host's other load, which this lock does not remove. CI on the commit is the
+  coordinator's.
+* A rate below 2.95 % of a failure at `Close`'s first step on the Linux host (0 of 100); a first step over 5 s at under 1 in 34.
+* The Windows laptop beyond 20 rounds (0 of 20); this Mac's first steps (its 3 gate rounds are unstamped).
+* `cmd/generate`'s part of CI's step in the series (the confirmation ran it, 3 rounds).
+* What slowed the four first steps over 4.0 s that had no bulk test beside them; why the Linux package is 4 to 9 s a round slower
+  than phase 6's, beyond the two `Close`s.
+* Anything under the in-process starved load (not run, as the phase says), and on FreeBSD (`go vet` only).
+* The stamps' own cost, and the two tail stamps added to the series' tree (the same `time.Now` and one append each).
+* The plant is a model of the next reader, not that reader.
+
+#### Files, checks and staging
+
+Changed: `agentproc/agentproc_test.go`, `agentproc/inprocess_test.go`, `agentproc/tap_test.go`, `docs/architecture.md`, `CHANGELOG.md`,
+`docs/README.md`, this PLAN (this entry, and the annotations at step 2 and at the end of the entry it corrects) and the MADR (the
+addition at its end). Not changed: any source, workflow, script or tool. Scratch only (`<scratch>`): the trees, the scripts, the chunk
+outputs, the tables.
+
+Checks, after the last change to any test file (the three files' modification times, 10:03:26 CST, 16:03Z): `make pre-add-check
+FILES="agentproc/agentproc_test.go agentproc/inprocess_test.go agentproc/tap_test.go"` through `run-heavy` on this Mac, queued
+13:10:55 CST, started 13:19:40, ended 13:21:34 CST (113 s of run), exit 0 ("3 file(s) gofmt-clean; both modules linted, vetted and
+tested (-race -shuffle=on, uncached), tidy, govulncheck"); `go vet ./agentproc/`, `GOOS=windows go vet ./agentproc/` and
+`GOOS=freebsd go vet ./agentproc/`, each exit 0. After the last record edit, with the files staged: `make check-records`, exit 0;
+`make markdownlint`, exit 0 ("Linting: 58 files", "0 issues in 0 files"); `make disclosure-check`, exit 0 ("843 tracked file(s), 0
+finding(s)"); a scan of the staged additions for the hosts' names, the local account name, real-machine paths and queue tickets
+found none. Run twice, the second time after this paragraph was written, with the same results.
+
+Staged, not committed, not pushed. The plan's status is not set by this entry: the coordinator's commit and CI come first.

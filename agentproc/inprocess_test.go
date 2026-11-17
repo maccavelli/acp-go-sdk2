@@ -441,8 +441,10 @@ func rootDir(t *testing.T) string {
 // child test waits for its agent's ready, this waits for the first Write to
 // return, so that Close's grace covers the last 8 MiB alone
 // (0042-PLAN-in-process-agent-runner.md, phase 11's deviation). It takes
-// bulkLock before it starts Serve and releases it once the first Write has
-// returned, so that readyWait bounds the read of its own 56 MiB alone
+// bulkLock before it starts Serve and holds it until Close has returned, so
+// that readyWait bounds the read of its own 56 MiB alone and Close's first
+// step, which reads the last 8 MiB under a grace of 5 s, has no other bulk
+// test reading beside it
 // (0057-MADR-agentproc-test-graces-on-a-loaded-runner.md).
 func TestInProcessDetachedTapIsPrefix(t *testing.T) {
 	t.Parallel()
@@ -471,7 +473,6 @@ func TestInProcessDetachedTapIsPrefix(t *testing.T) {
 	case <-time.After(readyWait):
 		t.Fatalf("the connection did not read Serve's first 56 MiB within %v", readyWait)
 	}
-	done()
 	deadline := time.Now().Add(readyWait)
 	for out, _ := p.DroppedTapBytes(); out == 0; out, _ = p.DroppedTapBytes() {
 		if time.Now().After(deadline) {
@@ -484,6 +485,7 @@ func TestInProcessDetachedTapIsPrefix(t *testing.T) {
 	if err := p.Close(); err != nil {
 		t.Fatalf("Close = %v", err)
 	}
+	done()
 	got := tap.bytes()
 	if !bytes.HasPrefix(stream, got) {
 		t.Errorf("the detached tap received %d bytes that are not the stream's beginning", len(got))

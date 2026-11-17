@@ -8,7 +8,9 @@
 - Made the four `agentproc` tests that read 24 to 56 MiB through the connection (`TestBlockedTapDetached`,
   `TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix`, `TestTapDrainBoundedByGrace`) read them one test at a
   time, under a test-only lock, so that the Windows laptop's package run and a four-CPU Linux host beside the module no
-  longer wait past their 30 s bound for each other's reads under `-race`; tests only. `agentproc`'s time in CI's step
+  longer wait past their 30 s bound for each other's reads under `-race`, and the two 56 MiB tests hold it until their
+  `Close` has returned, so that no other of the four reads beside `Close`'s first step, which ended at its 5 s grace without
+  the agent's exit seen in 4 of 100 module rounds with the lock released earlier; tests only. `agentproc`'s time in CI's step
   without `-race` rose from about 8 s to about 20 s with the graces of the item above: seventeen tests and subtests each
   sit a grace out by design, and the grace went from 300 ms to 3 s
   ([0057-MADR](docs/decisions/0057-MADR-agentproc-test-graces-on-a-loaded-runner.md)).

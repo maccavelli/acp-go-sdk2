@@ -659,3 +659,35 @@ rounds ("2026-11-17: phase 6, step 2 again").*
   waits, as before. The lock ending at "ready", as the report measured it and as `HEAD` has it, does not stand.
 * **Confirmation.** The rounds of step 2 again with the lock held through `Close`: the stamped first step and `Close`'s total in
   every round, none over 5 s, none failing. 0 of 100 would exclude a rate above 3.0 % at that level, not a lower one.
+
+
+## Addition 2026-11-17, the lock held through `Close` for the two 56 MiB tests, built
+
+*Added 2026-11-17, on the amendment above ("after the longer series on `Close`'s first step"), by the owner's ruling, relayed by the
+coordinator, "Measure a longer series first", and the PLAN's phase 6, step 2, second bullet. The PLAN's execution record has the
+chunks, the seeds and the rounds ("2026-11-17: phase 6, the alternate branch (the lock held through `Close`)").*
+
+* **What was built.** `TestDetachedTapIsPrefix` and `TestInProcessDetachedTapIsPrefix` hold `bulkLock` from before they launch their
+  agent until `Close` has returned (`agentproc/tap_test.go:420`, `agentproc/inprocess_test.go:488`); `TestBlockedTapDetached` and
+  `TestTapDrainBoundedByGrace` still release it once their agent is ready, since they read no megabytes after it. Test files only: no
+  assertion, bound, grace or data size changed. The lock ending at "ready", as the report measured it and as `1575f03` had it, no
+  longer stands for the two 56 MiB tests; the amendment "after phase 5's report" is read with this addition.
+* **What was measured with it.** 100 module rounds on the Linux host with the same stamps, `-race`: 0 failures; no first step over
+  5 s (the longest 4.519 s, against 5.00 s at the grace); first steps over 4.0 s fell from 36 of 200 at `1575f03`'s lock to 4 of 200; the
+  median from 2.6 and 2.9 s to 2.0 and 2.1 s; 0 of 200 first steps had another of the four in a window of its own, where at
+  `1575f03` 145 of 200 did and all 36 over 4.0 s. 0 of 100 excludes a rate above 2.95 % at the one-sided 95 % level, not a lower one;
+  the rate at `1575f03` was 4 of 100. On the Windows laptop, 20 package rounds: every test passed, the waits to "ready" 17.8, 19.1,
+  17.9 and 9.4 s at most (the bound is 30 s), the first steps 2.7 s at most. A plant that makes the next reader certain and heavy
+  failed the first step at its 5 s in 10 of 10 runs with the lock released at "ready" and passed 10 of 10 with the lock held through
+  `Close`. The confirmation (the package 20 rounds and the module 3 rounds on the Linux host, 3 rounds of this Mac's gate) passed.
+* **A correction to the amendment above.** Its figures were read with a pairing that took, for a `Process` address, the first
+  `input_closed` and `step1_end` of the round; an address reused by a later `Process` paired a test's first step with an earlier
+  one's. Corrected by pairing in time after the test's `close_call`: the median first step 2.6 and 2.9 s (not 2.5 and 2.8), the 95th
+  percentile 4.5 and 4.6 s (unchanged), 36 of the 200 steps over 4.0 s (not 31), and 5 over 5.0 s (unchanged); the four failed rounds
+  and the fifth step over 5 s stand as written, each confirmed on the raw stamps. The PLAN's execution record has the corrected
+  table beside the committed one and the planted case.
+* **Consequence, as the amendment above said it.** The lock's cost grew by the two tests' `Close`, a median of 2.2 and 2.4 s each and
+  4.8 s at most, held in turn: the Linux package took 53.2 to 57.5 s a round against 48.4 to 49.5 s, the module's `agentproc` 55.6 to
+  59.4 s against 51.8 to 55.2 s; no measurable rise on the Windows laptop (50.5 s a round against 50.0 s); the waits for the lock, which
+  are not in the 30 s, reached 38.9 s on the Linux host and 42.1 s on the Windows laptop. The tail of first steps up to 4.5 s from the
+  host's other load, which the lock does not serialise, remains: a margin of 0.48 s of the 5 s at worst in 100 rounds.

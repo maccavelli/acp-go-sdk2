@@ -1256,8 +1256,11 @@ Checks that guard it:
   `lastOutputGrace` (42 s) and `releasedWait` (35 s), as 0057-MADR-agentproc-test-graces-on-a-loaded-runner.md records;
   `TestBlockedTapDetached`, `TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix` and `TestTapDrainBoundedByGrace`,
   which read 24 to 56 MiB through the connection under `-race`, take `bulkLock` in turn, so that no two read their megabytes at
-  once and each one's `readyWait` of 30 s waits for its own, as the same record's amendment after the report on them records; the
-  rest keep `testGrace` (300 ms) or the grace their comment states, and `TestWaitErrorSaysTheCauseOnce`, which
+  once and each one's `readyWait` of 30 s waits for its own; `TestBlockedTapDetached` and `TestTapDrainBoundedByGrace` release it
+  once their agent is ready, and the two 56 MiB tests hold it until their `Close` has returned, so that no other of the four reads
+  beside `Close`'s first step, which reads the agent's last 8 MiB under a grace of 5 s (with the lock released at "ready", 4 of
+  100 module rounds on the Linux host ended that step at 5 s with the agent's exit unseen), as the same record's amendments after
+  the report on them and after the longer series on that step record; the rest keep `testGrace` (300 ms) or the grace their comment states, and `TestWaitErrorSaysTheCauseOnce`, which
   requires `Wait`'s error to say its cause once, among them, the stderr tail's seven in
   `stderr_test.go`, the transcript's four
   in `transcript_test.go`, `TestTranscriptCloseAfterAbandon` among them, and the bounded close's seven in `closecontext_test.go`:

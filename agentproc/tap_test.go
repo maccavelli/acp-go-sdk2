@@ -190,18 +190,27 @@ func blockedTap(t *testing.T) (*capture, func()) {
 // against readyWait's 30 s, and on a four-CPU Linux host beside the module one
 // waited 33 s. A test takes the lock in bulkTurn, before it launches its
 // agent, so its readyWait starts after the wait for the lock and its own
-// megabytes are the only ones read. See
+// megabytes are the only ones read. TestBlockedTapDetached and
+// TestTapDrainBoundedByGrace release it once their agent is ready, all their
+// megabytes read. The two 56 MiB tests, TestDetachedTapIsPrefix and
+// TestInProcessDetachedTapIsPrefix, hold it until Close has returned: their
+// last 8 MiB are read during Close's first step, which has a grace of 5 s,
+// and in 4 of 100 module rounds on a four-CPU Linux host, with the lock
+// released at ready, that step ended at 5 s with the agent's exit unseen, each
+// time with one other bulk test reading beside it. See
 // 0057-MADR-agentproc-test-graces-on-a-loaded-runner.md, "Amendment
-// 2026-11-16, after phase 5's report", and
+// 2026-11-16, after phase 5's report" and "Amendment 2026-11-17, after the
+// longer series on Close's first step", and
 // 0057-REPORT-agentproc-56-mib-tests-30s-bound-measured.md.
 var bulkLock sync.Mutex
 
 // bulkTurn takes bulkLock, and returns done, which releases it. Each test
 // calls it after t.Parallel and before it launches its agent, and calls done
-// once its megabytes are read; done is also registered with t.Cleanup, so a test
-// that fails or ends early releases the lock, and it releases it once. The
-// lock has no timeout: each holder is bounded by its own readyWait, and go
-// test's -timeout is the backstop.
+// once its megabytes are read: once the agent is ready, or, for the two 56 MiB
+// tests, once Close has returned. done is also registered with t.Cleanup, so a
+// test that fails or ends early releases the lock, and it releases it once.
+// The lock has no timeout: each holder is bounded by its own readyWait and its
+// Close, and go test's -timeout is the backstop.
 func bulkTurn(t *testing.T) (done func()) {
 	t.Helper()
 	bulkLock.Lock()
@@ -382,8 +391,9 @@ func TestBlockedTapDetached(t *testing.T) {
 // while the agent still has 8 MiB to write, and what it received is the
 // stream's beginning (0030-MADR-record-initialize-on-arrival.md, the
 // amendment of 2026-10-21, question 9). It takes bulkLock before it launches
-// its agent and releases it once the agent is ready, so that readyWait bounds
-// the read of its own 56 MiB alone
+// its agent and holds it until Close has returned, so that readyWait bounds
+// the read of its own 56 MiB alone and Close's first step, which reads the
+// last 8 MiB under a grace of 5 s, has no other bulk test reading beside it
 // (0057-MADR-agentproc-test-graces-on-a-loaded-runner.md).
 func TestDetachedTapIsPrefix(t *testing.T) {
 	t.Parallel()
@@ -392,7 +402,6 @@ func TestDetachedTapIsPrefix(t *testing.T) {
 	p, ready := launchTapped(t, "bulk", []string{bulkEnv + "=56", bulkMoreEnv + "=8"}, 5*time.Second, tap, nil)
 	t.Cleanup(release)
 	awaitReady(t, "bulk", ready)
-	done()
 	deadline := time.Now().Add(readyWait)
 	for out, _ := p.DroppedTapBytes(); out == 0; out, _ = p.DroppedTapBytes() {
 		if time.Now().After(deadline) {
@@ -408,6 +417,7 @@ func TestDetachedTapIsPrefix(t *testing.T) {
 	if err := p.Close(); err != nil {
 		t.Fatalf("Close = %v", err)
 	}
+	done()
 	got, want := tap.bytes(), bulk64()
 	if !bytes.HasPrefix(want, got) {
 		t.Errorf("the detached tap received %d bytes that are not the stream's beginning", len(got))

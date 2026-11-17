@@ -55,9 +55,11 @@ const descendantGrace = 2 * slack
 // bounds the test's setup, not the helper: a loaded machine has taken over
 // 3 s to start the test binary. The four bulk tests start it once they hold
 // bulkLock (tap_test.go), so for them it bounds the connection's read of
-// their own 24 to 56 MiB, and not of the others'
-// (0057-MADR-agentproc-test-graces-on-a-loaded-runner.md, the amendment after
-// phase 5's report).
+// their own 24 to 56 MiB, and not of the others'; the two 56 MiB tests hold
+// the lock until their Close has returned, so that no other bulk test reads
+// beside Close's first step
+// (0057-MADR-agentproc-test-graces-on-a-loaded-runner.md, the amendments after
+// phase 5's report and after the longer series on Close's first step).
 const readyWait = 30 * time.Second
 
 // testClient counts session updates. No test calls another client method.
