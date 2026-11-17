@@ -1848,3 +1848,201 @@ Each after the last edit, in UTC.
 Changed: `docs/architecture.md`, `docs/decisions/0027-PLAN-agent-process-helper.md` (one annotation), `CHANGELOG.md`, `README.md`,
 `agentproc/agentproc.go` (one comment), and this PLAN (this entry). Not changed: `docs/README.md` (the rows' text is unchanged);
 any test file, code, identifier, workflow or script. Staged, not committed, not pushed.
+
+### 2026-11-16: phase 4 (confirmation and CI)
+
+Run by a mainstream-tier model at medium effort, as the phase prices it, on the coordinator's brief. `date +%F` printed 2026-11-16;
+the times below are UTC, so the runs fall on 2026-11-17. Base commit `8b0b051`, `main`, level with `origin/main`, tree clean at the
+start. The phase changed no source, test, workflow or tool; its only tree change is this entry.
+
+* **Approval.** The owner's ruling, relayed by the coordinator: "Run phases 1 to 4 through; then the report" (the approval entry
+  above). The rulings the acceptance rests on, as labels: "A measured report, then decide" and "Count it apart with the other
+  readiness failure", each the owner's ruling, relayed by the coordinator. Phase 2 is commit `f102c5a`, phase 3 `8b0b051`.
+* **Read:** this PLAN ("Where the race gates run" with its additions, phase 4 with its acceptance and additions, phase 5, phase 2's
+  list of the 45 moved tests), `AGENTS.md`, `tools/README.md`, `tools/gates.py`, `tools/remote.py`'s `tree` command, the first lines
+  of `tools/watch_ci.py`, the `Makefile`'s race targets, `.github/workflows/ci.yml` and the skill `available-dev-hosts`.
+* **What load each run had.** Every Linux run was on the Linux host, alone in its queue, with no in-process starved load (that was
+  phase 2's A/B): the package rounds ran idle, the host's own load average before and after each chunk 1.4 to 3.4 on its four CPUs
+  (other sessions' work, read from `uptime` in each chunk's output); the module rounds ran as CI runs it, the packages in
+  parallel beside each other. The Mac's rounds ran one at a time through `run-heavy`.
+
+#### The commands
+
+* **Package chunks.** `go test -race -shuffle=on -count=5 -v -timeout=30m ./agentproc/`, four of them, 20 rounds, each through
+  `run-on-host --need linux --race -- sh pkg.sh <name> 5` (a scratch copy of the tree at `8b0b051`; never a WSL distro). `-v` is
+  added so that passes are in the output. The timeout: a round measured about 105 to 109 s beside the starved load in phase 1, and a
+  hung wait now takes up to 45 s, so five rounds are about 9 minutes at that rate; 30 minutes is more than three times that. The
+  chunks' own time was 235 to 253 s (about 49 s a round, idle). With `-count=5` and `-shuffle=on` the binary prints one seed, which
+  seeds the order of every round of the chunk.
+* **Module rounds.** CI's step, quoted from `.github/workflows/ci.yml`: `go test -race -shuffle=on ./...` and
+  `( cd cmd/generate && go test -race -shuffle=on ./... )`, each with `-v` added; three rounds through `run-on-host --need linux
+  --race -- sh mod.sh <name>`. Each package of a `./...` run prints its own seed; they are in the host's files.
+* **This Mac.** `go test -race -shuffle=on ./...` exactly, three rounds, each through `run-heavy -- sh mac.sh`.
+* **Gates.** `tools/gates.py --all` was run in two parts, so that no run of mine shared a host with another: the sixteen gates that
+  are not the hosts' (`tools/gates.py --out <scratch>`) through `run-heavy` here, then `tools/gates.py linux windows` through
+  `run-heavy` here with `ACP_LINUX_HOST` and `ACP_WINDOWS_HOST` set to the two hosts' SSH aliases. `tools/remote.py tree`, which
+  those two gates run, copies the tree and runs `go test -count=1 -shuffle=on ./...` over `ssh` and does not queue on the target
+  host: no other run of mine was on either host then, and another session's was not checked beyond `run-heavy --status` here.
+  *Added 2026-11-16, at the coordinator's request:* the second run started 2026-11-17T01:02:04Z and ended 01:05:24Z (200 s); the
+  `linux` gate, run first, wrote its log at 01:03:49Z (about 105 s after the start) and the `windows` gate its log at 01:05:23Z
+  (about 94 s after that), so a reader can set them beside another session's runs on those hosts. The first run, of the sixteen
+  gates, started 00:30:45Z and ended 00:36:50Z.
+
+#### The chunks
+
+| Chunk | Host | Rounds | Seed | Start | Seconds | Exit | Failed tests |
+| :--- | :--- | ---: | :--- | :--- | ---: | ---: | :--- |
+| `pkg-1` | the Linux host, `-race` | 5 | 1794875375736694669 | 00:29:20Z | 263 | 0 | none |
+| `pkg-2` | the Linux host, `-race` | 5 | 1794875636073867985 | 00:33:43Z | 249 | 0 | none |
+| `pkg-3` | the Linux host, `-race` | 5 | 1794875886196072637 | 00:37:52Z | 267 | 0 | none |
+| `pkg-4` | the Linux host, `-race` | 5 | 1794876152677963260 | 00:42:19Z | 254 | 0 | none |
+| `mod-1` | the Linux host, `-race` | 1 | per package, in the host's file | 00:46:33Z | 304 (root 111, generate 188) | 0 and 0 | none |
+| `mod-2` | the Linux host, `-race` | 1 | per package | 00:51:37Z | 303 (root 110, generate 188) | 0 and 0 | none |
+| `mod-3` | the Linux host, `-race` | 1 | per package | 00:56:39Z | 317 (root 114, generate 198) | 0 and 0 | none |
+| `mac-mod-1` | this Mac, `-race` | 1 | `-shuffle=on` | 00:29:34Z | 24 | 0 | none |
+| `mac-mod-2` | this Mac, `-race` | 1 | `-shuffle=on` | 00:29:58Z | 23 | 0 | none |
+| `mac-mod-3` | this Mac, `-race` | 1 | `-shuffle=on` | 00:30:22Z | 23 | 0 | none |
+| `gates-local` | this Mac | 16 gates | - | 00:30:45Z | 365 | 0 | - |
+| `gates-hosts` | the two hosts, from here | 2 gates | - | 01:02:04Z | 200 | 0 | - |
+| `win-probe` | the Windows laptop, `-race` | 1, the three tests | 1794877697389566800 | 01:08:08Z | 15 (the run 3.6 s) | 0 | none |
+| `win-3tests` | the Windows laptop, `-race` | 20, the three tests | 1794877716860926500 | 01:08:27Z | 56 (the run 45.0 s) | 0 | none |
+| `win-pkg` | the Windows laptop, `-race` | 3, the whole package | 1794877772160841800 | 01:09:23Z | 137 (the run 127.0 s) | 1 | `TestBlockedTapDetached`, `TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix`, each in 3 of 3 rounds |
+
+No chunk was re-run, cancelled or lost; every chunk run is in the table. The module chunks' agentproc package took 54.6, 51.6 and
+54.9 s there, and the package chunks' rounds about 49 s each, so the whole package under the module's own load was no slower than
+alone, within a few seconds.
+
+#### The judgment, as "Where the race gates run" says
+
+* **The tests this PLAN moved.** 45 in the table of phase 2; 42 build on Linux. Each of the 42, by name from the host's `-v`
+  output, passed in each of the 20 package rounds and each of the 3 module rounds: 23 passes, 0 failures, 0 skips, each. The three
+  Windows-only (`TestBreakawayLeavesJob/Close`, `TestDescendantInJobDespiteSlowAttach`, `TestCallersCreationFlagsKept`) do not
+  build on Linux, so they are not in these rounds; they ran on the Windows laptop in phase 2, once each, and in the `windows` gate
+  here (`go test -count=1 -shuffle=on ./...`, without `-race`), which passed once, and in CI's Windows jobs for `f102c5a` and
+  `8b0b051`.
+* **Counted apart.** `TestDetachedTapIsPrefix` and `TestInProcessDetachedTapIsPrefix`: 23 passes, 0 failures each.
+  `TestBlockedTapDetached` and `TestTapDrainBoundedByGrace`: 23 passes, 0 readiness failures ("the bulk agent did not say it was
+  ready within 30s") and 0 other failures each. None of the four failed in any of the 23 rounds, so there is nothing of theirs to
+  count or to check against the readiness message. This is not evidence for or against phase 5's question: the host was idle, not
+  under phase 2's starved load, where the readiness failures appeared.
+* **Any other test.** None failed in any round; no `DATA RACE` and no `panic` in any chunk's output. Every package of every module
+  round was `ok` (the judge's table: `judge-all.txt`).
+
+#### The Windows-only moved tests, run on the Windows laptop
+
+*Added 2026-11-16, at the coordinator's request, after the entry above was written, run by the same model.* The coordinator's
+application of the acceptance's intent, recorded as the coordinator's and not as the owner's: a moved test is confirmed where it
+builds. The three Windows-only moved tests became moved tests after the acceptance was written (phase 2), so it could not name a
+Windows confirmation. Run at `8b0b051` (the same scratch copy of the tree), through `run-on-host --need windows --race` (never a
+WSL distro), one heavy run at a time on that host, the host keeping its own output and exit status in files, `go1.27.4
+windows/amd64`, `CGO_ENABLED=1`:
+
+1. The three tests: `go test -race -shuffle=on -count=20 -v -timeout=10m -run 'TestBreakawayLeavesJob|TestDescendantInJobDespiteSlowAttach|TestCallersCreationFlagsKept' ./agentproc/`
+   (`win-3tests`). The timeout was set from one measured round, `win-probe`, the same command with `-count=1`: the run took 3.6 s
+   (15 s with the build and the dispatch), so 20 rounds are about 72 s; 10 minutes is more than eight times that. Exit 0 in 56 s;
+   `ok` in 45.0 s.
+2. The whole package: `go test -race -shuffle=on -count=3 -v -timeout=30m ./agentproc/` (`win-pkg`), so that the three are seen
+   beside the rest of the package, as CI's Windows jobs run it (no `-v` there). The timeout, 30 minutes, is over thirteen times the
+   run's 127 s.
+
+Pass counts, from the host's `-v` output:
+
+| Test | `win-3tests`, 20 rounds | `win-pkg`, 3 rounds |
+| :--- | :--- | :--- |
+| `TestBreakawayLeavesJob` | 20 passes, 0 failures | 3 passes, 0 failures |
+| `TestBreakawayLeavesJob/Close` | 20 passes, 0 failures | 3 passes, 0 failures |
+| `TestBreakawayLeavesJob/Kill` | 20 passes, 0 failures | 3 passes, 0 failures |
+| `TestDescendantInJobDespiteSlowAttach` | 20 passes, 0 failures | 3 passes, 0 failures |
+| `TestCallersCreationFlagsKept` | 20 passes, 0 failures | 3 passes, 0 failures |
+
+The package rounds: exit status 1, the package `FAIL` in 127.0 s, and exactly nine failed top-level tests, three in each round,
+each of them a test counted apart; the failure lines are quoted from `win-pkg.txt`, the same three messages in each of the three
+rounds:
+
+* `TestBlockedTapDetached`: `tap_test.go:317: the bulk agent did not say it was ready within 30s`, the readiness message and
+  nothing else, 3 of 3 rounds, so counted apart as the plan says (34.8 s, 34.7 s and 33.9 s).
+* `TestDetachedTapIsPrefix` (a 56 MiB test): `tap_test.go:358: the bulk agent did not say it was ready within 30s`, 3 of 3.
+* `TestInProcessDetachedTapIsPrefix` (the other 56 MiB test): `inprocess_test.go:468: the connection did not read Serve's first 56
+  MiB within 30s`, 3 of 3.
+* `TestTapDrainBoundedByGrace` passed in 3 of 3 rounds, so there is no count of its readiness failure here. No other test failed,
+  and the output has no `DATA RACE` and no `panic`.
+
+So no moved test failed and no test failed outside those counted apart; the phase does not stop. The three counted-apart tests
+failing here and not on the Linux host is a measurement for phase 5's report, not a finding of this phase; not investigated here.
+
+#### The Mac's module rounds
+
+Three of three passed: exit 0 each, 24, 23 and 23 s; every package `ok`, none cached (the output has no `(cached)`).
+
+#### `tools/gates.py`
+
+All 18 gates exit 0: `regen`, `precheck`, `newfiles` ("no new .go files"), `nojsonv2`, `winvet`, `records`, `mdlint`, `idscan`,
+`tools`, `lint`, `fix`, `tidy`, `api`, `race3`, `floor`, `platforms` (the first run, 00:30:45Z to 00:36:50Z, "all gates passed"),
+then `linux` and `windows` (the second run, "all gates passed"; the `linux` gate's log shows every package `ok` at go1.27.4,
+`agentproc` included, so no F7 test failed there and there is no F7 deviation). These ran on the clean tree at `8b0b051`, before this entry was written.
+
+#### CI
+
+`tools/watch_ci.py <commit> --branch main`, each exit 0. Two runs a commit: the `CI` workflow's six `validate` jobs, and `Docs`.
+
+| Commit | Run | Job | Job id | Conclusion |
+| :--- | :--- | :--- | :--- | :--- |
+| `f102c5a` | `CI`, 43985679958, <https://github.com/maccavelli/acp-go-sdk2/actions/runs/43985679958> | `validate (windows-2025, 1.26.11)` | 133713094026 | success |
+| | | `validate (ubuntu-24.04, 1.26.11)` | 133713094179 | success |
+| | | `validate (macos-15, 1.27.4)` | 133713094219 | success |
+| | | `validate (windows-2025, 1.27.4)` | 133713094221 | success |
+| | | `validate (macos-15, 1.26.11)` | 133713094346 | success |
+| | | `validate (ubuntu-24.04, 1.27.4)` | 133713094404 | success |
+| `f102c5a` | `Docs`, 43985679996, <https://github.com/maccavelli/acp-go-sdk2/actions/runs/43985679996> | `docs` | 133713093741 | success |
+| `8b0b051` | `CI`, 43987715086, <https://github.com/maccavelli/acp-go-sdk2/actions/runs/43987715086> | `validate (windows-2025, 1.26.11)` | 133720062420 | success |
+| | | `validate (macos-15, 1.27.4)` | 133720062810 | success |
+| | | `validate (windows-2025, 1.27.4)` | 133720062836 | success |
+| | | `validate (ubuntu-24.04, 1.26.11)` | 133720062855 | success |
+| | | `validate (ubuntu-24.04, 1.27.4)` | 133720062953 | success |
+| | | `validate (macos-15, 1.26.11)` | 133720062979 | success |
+| `8b0b051` | `Docs`, 43987715139, <https://github.com/maccavelli/acp-go-sdk2/actions/runs/43987715139> | `docs` | 133720062116 | success |
+
+`f102c5a`'s `CI` run (created 2026-11-17T00:12:04Z) is the first CI run with the amended tests: its parent `032320a` and the
+commits before it change no test file, and `f102c5a` is the commit that changed them. `TestDescendantsEnded`, the failure this PLAN
+was opened for, appears in none of the six jobs' logs, passed or failed: CI runs `go test` without `-v`, so a pass prints no test
+name; what the logs show is the package's line, `ok ... agentproc` in the race step of each of the four jobs that have one (Linux
+and Windows; the macOS jobs have no race step): 40.7 s, 45.9 s, 34.6 s and 43.9 s on `f102c5a`, no `--- FAIL` in any of the six.
+So CI shows no failure of it, and does not show it passed by name; the Linux host's `-v` rounds do (23 of 23, each subtest).
+`8b0b051`'s jobs were not read beyond their conclusions.
+
+#### Acceptance, line by line
+
+* **On the Linux host every moved test passes in each of the 20 package rounds and the 3 module rounds.** Met for the 42 that build
+  there, 23 of 23 each. Not met as written for the 3 Windows-only tests, which cannot run there (above); their evidence is the
+  laptop run of phase 2, the `windows` gate, and CI's Windows jobs, none of them 23 rounds.
+  *Added 2026-11-16, at the coordinator's request, as the coordinator's application of the acceptance's intent (a moved test is
+  confirmed where it builds), not the owner's ruling:* the Windows-only moved tests are confirmed on the Windows laptop: each
+  passed in 20 of 20 rounds under `-race -shuffle=on`, and in 3 of 3 whole-package rounds ("The Windows-only moved tests", above).
+* **No test fails there but the F7 tests, whose failures are counted and recorded.** Met: no test failed; the F7 count is 0 in 23.
+  On the Windows laptop, three counted-apart tests failed in 3 of 3 package rounds, as recorded above, and nothing else.
+* **The module's race gate passes three of three on this Mac.** Met: 3 of 3.
+* **The gates pass.** Met: 18 of 18.
+* **CI's six jobs "completed success".** Met for `f102c5a` and for `8b0b051`.
+
+#### Deviations
+
+None.
+
+#### Not verified
+
+* That a loaded runner meets the new graces: these Linux rounds were idle, or the module beside itself; phase 2's A/B is the loaded
+  evidence, and the F7 readiness failures did not appear here, so nothing was learned of them.
+* 23 rounds on one four-CPU host is a sample; a failure rate under 1 in 23 is not excluded.
+* FreeBSD (vet only, phase 2). The 3 Windows-only moved tests were repeated on the Windows laptop (above), on one host whose load was not measured, 20 rounds
+  and 3 whole-package rounds; not under a starved load, and not on a loaded Windows runner.
+* The module rounds were run with `-v` added to CI's line; the Mac's were not.
+* `tools/remote.py tree` is not queued on its host (above).
+* The CI logs' per-test passes: CI does not print them.
+* The seeds of the module rounds are per package and are in the host's files, not in this entry.
+
+#### Files, checks and staging
+
+Changed: this PLAN (this entry). Not changed: `docs/README.md` (the rows' text is unchanged), any source, test, workflow or tool.
+Scratch only: the chunk scripts, the judge and every chunk's output (`pkg.sh`, `mod.sh`, `mac.sh`, `judge.py`, `out/`).
+Checks, each after the last edit, in UTC, run with the PLAN staged: `make check-records`, exit 0; `make markdownlint`, exit 0 ("57 files", "0 issues in 0 files"); `make disclosure-check`, exit 0 ("842 tracked file(s), 0 finding(s)").
+Staged, not committed, not pushed.
