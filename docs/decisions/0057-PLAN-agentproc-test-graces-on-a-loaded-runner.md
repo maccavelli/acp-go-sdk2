@@ -34,6 +34,13 @@ goal also covers: the four tests the audit left undecided, `TestWaitErrorSaysThe
 test that cannot be made to fail at `HEAD` does not move and is reported; a bound that cannot be given a figure that follows from
 its measurement and keeps its test able to fail on its defect stops the PLAN for the owner.
 
+*Added 2026-11-16, after phase 5's report, for the owner's decision on it, "Run the four tests one at a time" (the owner's ruling,
+relayed by the coordinator; the MADR's amendment of that date).* The goal also covers: `TestDetachedTapIsPrefix`,
+`TestInProcessDetachedTapIsPrefix`, `TestBlockedTapDetached` and `TestTapDrainBoundedByGrace` taking a test-only lock, so that no two
+of them read their megabytes at once, each seen to fail at `HEAD` under a condition the lock removes and to pass with it, by a new
+phase 6; and an account, by test and by seconds, of `agentproc`'s rise in CI's step without `-race`. The four are not asked to pass
+under the in-process starved load, where they stay counted apart.
+
 ## Scope
 
 **Preconditions.** The MADR is `accepted` with its questions answered (2026-11-16), and this PLAN amended to the answers (the same
@@ -81,6 +88,15 @@ until question 5 is answered.
 
 **Order and review, amended** (added 2026-11-16): phases 1, 1b, 2, 3 and 4 run in that order, each reviewed, committed and
 CI-checked by the coordinator before the next; phase 5 after CI is green on the fix, as before.
+*Added 2026-11-16, after phase 5's report:* phase 6 runs after phase 5, reviewed, committed and CI-checked by the coordinator as the
+others are; the owner's decision "Run the four tests one at a time" names it a new phase with its own proof and confirmation rounds.
+In scope as well: the four bulk tests and the lock in `agentproc`'s test files; the docs the lock makes false or incomplete.
+Out of scope still: any product code; the four tests' bounds and data; the starved load for these four.
+
+**Where the race gates run, after the lock** (added 2026-11-16, after phase 5's report). Until phase 6's confirmation has passed,
+the rule above stands unchanged. Once it has, the rule is question 6's answer (below); under the in-process starved load the four
+stay counted apart whatever the answer, since the owner's decision does not ask them to pass there. A serialised test over 30 s on
+the Linux host or the Windows laptop in phase 6's confirmation is a stop for the owner, not a count apart.
 
 **The rule each test is classified by** (the constant's comment carries it):
 
@@ -267,6 +283,91 @@ question 5's answer (c), `closecontext_test.go:156` is the report's too.
 **Acceptance:** the REPORT committed and put to the owner, who then decides what follows, as the answer "A measured report, then
 decide" says; any defect it finds left for a record of its own. Until that decision, the race gates run as "Where the race gates
 run" says.
+*Annotated 2026-11-16, after the report:* met; the REPORT is `a82d483`, and the owner decided "Run the four tests one at a time"
+(the owner's ruling, relayed by the coordinator), which phase 6 carries out. This PLAN no longer completes with the owner's
+decision on the report: it completes when phase 6's acceptance is met.
+
+### Phase 6: the four bulk tests one at a time (mid tier, high effort)
+
+*Added 2026-11-16, after phase 5's report, by the owner's ruling "Run the four tests one at a time", relayed by the coordinator; the
+MADR's amendment "after phase 5's report".* Runs after phase 5. Line numbers are `a82d483`'s. Every `-race` run through
+`run-on-host --need linux --race`, `--need windows --race` or `run-heavy` on this Mac, never a WSL distro, one heavy run at a time
+on each host, in chunks of a few minutes; experiments in scratch copies (`git archive HEAD`).
+
+1. **The rise without `-race`, explained** (read-only; first, so that its finding is reviewed with the rest). `go test -json
+   -shuffle=on ./agentproc/` without `-race`, 5 rounds each at `032320a` and at `f102c5a`, on the Linux host, each test's elapsed
+   time from the JSON; CI's step times from the report ("The machines"). List every test whose time grew by 0.5 s or more, with
+   the seconds before and after, and the wait it now waits out: a grace's first step (class B, the first place to look:
+   `TestCloseLadder/exits_on_SIGTERM`, `TestInProcessTerminate`, `TestInProcessKill`, the step-2 subtests of
+   `TestWaitErrorSaysTheCauseOnce`), a bound stated in graces (`closecontext_test.go`'s `const bound` and contexts), `WaitDelay`, or
+   the watcher's grace for an escaped descendant's output (`TestEscapedDescendantDoesNotHoldWait`, `TestTapKeepsCloseEnding`); these
+   names are from reading, and the list is what the measurement gives. Then set the sum against the package's rise at CI's
+   parallelism. Say whether anything reduces it without weakening a test, each candidate with what it would change; a reduction that
+   changes a test, or the product, is not made in this phase but put to the owner, through the coordinator, as a question with
+   three options and a recommendation.
+2. **The 5 s `Close` grace under the lock, measured first** (scratch). The report measured the lock from launch to "ready" only,
+   and not `Close` under it; after "ready" the two 56 MiB tests read their last 8 MiB in `Close`'s first step, under their 5 s grace
+   (`tap_test.go:356`, `:371`; `inprocess_test.go:450`, `:479`), while another of the four may be reading. With the lock released at
+   "ready", stamp that first step: 20 rounds of the module beside it on the Linux host, 20 package rounds on the Windows laptop.
+   * If no first step exceeds 5 s, the lock ends at "ready", as the report measured.
+   * If one does, the lock is held through `Close`'s return for the two 56 MiB tests (their last 8 MiB are megabytes read, which the
+     decision's "never read their megabytes at once" covers), and the same rounds are run again.
+   * If a first step still exceeds 5 s with the lock held through `Close`, stop: the coordinator puts it to the owner. The 5 s
+     grace is not raised in this phase.
+3. **The lock** (in the tree, test files only). A package-level `sync.Mutex` in `agentproc/tap_test.go` and a helper, for example
+   `bulkTurn(t) (done func())`, which takes it, registers `done` with `t.Cleanup` through a `sync.OnceFunc` so that a test that
+   fails or ends early releases it, and returns `done`. Each of the four calls it after its `t.Parallel()` (so the sequential phase
+   never waits on it, and `-shuffle` changes only which of the four goes first) and before it launches its agent:
+   `TestBlockedTapDetached` before `launchTapped` (`tap_test.go:315`), calling `done` after `awaitReady` (`:317`);
+   `TestDetachedTapIsPrefix` before `launchTapped` (`:356`), `done` after `awaitReady` (`:358`), or after `Close` by step 2;
+   `TestTapDrainBoundedByGrace` before `startTapped` (`:441`), `done` once it returns, its "ready" being inside it;
+   `TestInProcessDetachedTapIsPrefix` before `startInProcess` (`inprocess_test.go:450`), `done` once `wrote` is closed (`:466`), or
+   after `Close` by step 2. The readiness bound starts after the lock is taken, so the time waited for the lock is not in the 30 s.
+   No timeout on the lock: each holder is bounded by its own `readyWait` and releases on failure, so a waiter waits at most three
+   holders' bounded turns, and `go test`'s own `-timeout` stays the backstop. A waiting test holds one of the package's parallel
+   slots; step 6 measures the package's time with it. The comment states what the lock is for and cites the MADR.
+4. **The proof** (scratch copies of `HEAD` and of the amended tree).
+   * **On the Windows laptop**, where the whole package under `-race` fails three of the four at today's bound in 10 of 10 rounds
+     (the report), `HEAD` must fail each of `TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix` and
+     `TestBlockedTapDetached` in each of 5 rounds and the amended tree pass each in each of 10. Against a failure rate of 10 of 10,
+     5 failing rounds and 10 clean ones are a proof; against a lower rate they are not, and the rate is recorded with them.
+   * **`TestTapDrainBoundedByGrace`** did not fail at 30 s on any host outside the starved load (19.2 s at most in the Windows
+     package, the report), so no real condition fails it: its proof is a planted readiness bound in the scratch copies only, set
+     between its measured waits with and without the lock in the same package rounds, failing at `HEAD` in each of 5 rounds and
+     passing with the lock in each of 10. The bound is the plant's, recorded with its value and how it was chosen; the tree's
+     30 s does not change.
+   * **On the Linux host**, where `HEAD` beside the module has one of the four over 30 s in 2 of 10 rounds (the report), pass and
+     fail cannot be a proof in a few rounds: 0 failures in 14 rounds is the fewest that excludes a 1 in 5 rate at the 95 % level
+     (0.8 to the 14th is under 0.05). There the proof is the measured wait: 20 module rounds with the lock, every wait recorded,
+     the worst set against 30 s, beside the report's unlocked figures.
+   * **The break, "one of the four does not take the lock"**, one scratch copy for each of the four, run as the proof above on
+     the Windows laptop: it must fail the way `HEAD` does in at least 4 of 5 rounds. If the break's one unlocked test, beside the
+     three locked ones, does not reach 30 s, the proof uses the planted readiness bound of the second bullet, set between the
+     measured waits with the lock and with the break, and says so. A break that no plant can make fail is reported to the
+     coordinator, and the phase stops there.
+5. **The docs.** `docs/architecture.md`'s sentence on `agentproc`'s checks: the four take one at a time, and why, citing the
+   MADR; `CHANGELOG.md`'s `Unreleased`: one line, tests only; `readyWait`'s comment (`agentproc_test.go:54`-`:57`) and the four tests'
+   comments where they state their waits; the race gates' rule as question 6's answer gives it, in this PLAN; each hit of a `grep -rn` for the four tests' names and `readyWait` read, and each the change makes false
+   corrected.
+6. **The confirmation.** Phase 4's rounds again with the lock: the package, 20 rounds, and the module, 3 rounds as CI's step runs
+   it, on the Linux host; the package, 20 rounds, on the Windows laptop; this Mac's module race gate, 3 rounds; `tools/gates.py
+   --all`; `make pre-add-check` with the changed files through `run-heavy`. The four are judged there like every other test; under
+   the starved load, which this phase does not run, they stay counted apart. The package's time with the lock is recorded beside
+   phase 4's.
+7. **CI:** the six jobs on the commit, through `tools/watch_ci.py`, and `agentproc`'s time in the steps with and without `-race`.
+
+**Stops.** A serialised test over 30 s in a confirmation round, or a 56 MiB test's `Close` over its 5 s with the lock held through
+it, is a stop for the owner, not a larger bound. A reduction of step 1's cost that changes a test, or a test that no plant can make
+fail, goes to the coordinator before anything else is done.
+
+**Verification:** step 1's table by test and seconds; step 2's first-step times and the rule it chose; step 4's rounds, with their
+counts and messages, and the plants' values; step 6's rounds; the checks of `AGENTS.md` (`make check-records`, `make markdownlint`,
+`make disclosure-check`).
+
+**Acceptance:** every step's result recorded; each of the four fails at `HEAD` and passes with the lock as step 4 says; the break
+fails; in step 6 no test fails on the Linux host or the Windows laptop, the four included, and none of the four waits over 30 s
+(the starved load is not run); this Mac's gate passes 3 of 3; the gates pass; CI's six jobs "completed success". When it is met, this PLAN
+is `complete`.
 
 ## Verification
 
@@ -285,6 +386,15 @@ relied on, and the record says how it failed.
 | W1's four | a late `Serve` return or handler, as fits | yes | its own assertion's plant, past `exitGrace` | A/B, 0 of 10 amended | 2 |
 | W2's four | phase 1b's margin plant, past the bound | yes, at 0.8 of the bound | W2's break | measured in 1b; A/B, 0 of 10 amended | 1b, 2 |
 | all moved tests | - | - | - | 20 rounds on the Linux host, F7's counted apart; the module race gate on this Mac | 4 |
+
+*Added 2026-11-16, after phase 5's report:*
+
+| Tests | Seen to fail at `HEAD` by | Passes with the lock | Its defect still caught by | Load proof | Phase |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix`, `TestBlockedTapDetached` | the Windows laptop's whole package, `-race`, 5 of 5 rounds | 10 of 10 rounds | their assertions, unchanged; the break "one of the four does not take the lock", 4 of 5 rounds | the Linux host, 20 module rounds, every wait recorded against 30 s | 6 |
+| `TestTapDrainBoundedByGrace` | a planted readiness bound in scratch, between its measured waits with and without the lock, 5 of 5 rounds | 10 of 10 rounds | as above | as above | 6 |
+| the two 56 MiB tests' `Close` | - | the first step under 5 s in 20 rounds on each host, or the lock held through `Close` | their 5 s grace, unchanged | the same rounds | 6 |
+| every test of the package | - | - | - | phase 4's rounds again, the four judged as every other test; this Mac's gate; CI | 6 |
 
 ## Rollout and Rollback
 
@@ -335,6 +445,21 @@ the chosen decision. The options are kept as they were put.
      and grace-stated bound have moved; if it stops failing, it stays at 3 s and the record says why. Not chosen: rescale it now
      with the other four; leave it to the report. Phase 1b's step for it (step 8, added below) therefore runs; "out of scope
      still", in "Scope, widened", holds only until that step's result. Phase 5's "question 5's answer (c)" is not the answer given.
+
+### Question after the report, open (added 2026-11-16)
+
+6. **Where the race gates run, once the lock has landed and phase 6's confirmation has passed** (the MADR's question 6). The
+   report's evidence for the lock: on the Linux host 7 module rounds, every wait under 30 s (24.0 s at most); on the Windows laptop 4
+   package rounds, 16 runs, every wait under 19 s.
+   * (a) Recommended: the four are judged on the Linux host and the Windows laptop like every other test, a failure of one there
+     a finding that stops a phase; the race gate of record stays this Mac's module run; under the starved load the four stay counted
+     apart. Cost: phase 6's 20 rounds on each host before the rule takes effect.
+   * (b) As (a), and the Linux host's module run and the Windows laptop's package run become race gates of record beside this Mac's.
+     Cost: a gate resting on 20 rounds, where the unlocked failure rate on the Linux host was 2 in 10.
+   * (c) Keep the four counted apart on both hosts, as evidence, until a longer series (for example 50 rounds each) is run. Cost:
+     the lock's effect stays unjudged in the gates.
+
+   Phase 6 runs to its confirmation without the answer; only the rule that follows the confirmation waits for it.
 
 ## Execution record
 
@@ -2138,6 +2263,8 @@ tree changes are the report, its row in `docs/README.md` and this entry.
   with "What could follow": five options, each with what it changes, its cost and what comes first, one marked as the
   recommendation. It decides nothing. This plan's status stays `in-progress`: the plan completes when the owner has decided what
   follows.
+  *Annotated 2026-11-16: superseded. The owner decided, "Run the four tests one at a time", and the plan now completes when phase
+  6's acceptance is met (the entry "2026-11-16: the owner's decision on the report", below).*
 * **Deviations.** None stops the phase. Recorded in the report's "What distorted a measurement": two package chunks that held my
   scratch experiments, one chunk that `run-on-host` ran on this Mac when its copy check failed, an exit status 2 that is my own
   edit of a running script, a serialised-variant chunk whose root package lacked fixtures, and this Mac not being idle.
@@ -2151,3 +2278,40 @@ tree changes are the report, its row in `docs/README.md` and this entry.
   scan of the three staged files for the hosts' names, the local account name, real-machine paths, queue tickets and leases found
   none.
   Staged, not committed, not pushed.
+
+### 2026-11-16: the owner's decision on the report
+
+Phase 5's report was committed as `a82d483`. The coordinator put its options to the owner, who decided the same day; the coordinator
+relayed the label, the option's text as put, and the options not chosen. This entry amends the pair; no phase ran, and no source,
+test, workflow or tool changed. Drafted by a strongest-tier model at high effort on the coordinator's brief, after reading this
+PLAN's execution record from phase 1b on and the report in full.
+
+* **"Run the four tests one at a time"**, the owner's ruling, relayed by the coordinator. As put to the owner: a test-only lock so
+  the four never read their megabytes at once; assertions, bounds and data stay as they are; measured on scratch, Windows waits fell
+  from 19 to 41 s to 7 to 14 s (18.5 s at most) and the Linux machine's longest from 32.8 s to 24.0 s; not shown to help under the
+  artificial starved load; a small new phase with its own proof and confirmation rounds. It is the report's option B, which the
+  report recommended. Options not chosen, as shown: one at a time and also rescale for the starved load (the figures would be
+  minutes); leave them and keep the race gate on this Mac. The report's options C (less data under `-race`) and E (a record about
+  the connection's per-line scanning) were listed in the report and not put to the owner as choices.
+* **What the decision leaves.** The owner has not asked that the four pass under the in-process starved load; under it they stay
+  counted apart, as today. Nothing here extends the decision.
+* **What this amendment adds:** phase 6 (mid tier, high effort): the rise without `-race` explained first; `Close`'s 5 s grace
+  under the lock measured before the lock's end is fixed; the lock; its proof; the docs; the confirmation; CI. Its stops: a
+  serialised test over 30 s in a confirmation round, or a 56 MiB test's `Close` over 5 s with the lock held through it, goes to
+  the owner, not to a larger bound.
+* **A cost phase 4 did not report:** `agentproc`'s time in CI's step without `-race` rose from about 8 s to about 20 s at
+  `f102c5a` (the report, "The machines"). Recorded in the MADR as a consequence of the first decision, and explained in phase 6's
+  step 1.
+* **New question:** 6, where the race gates run once the lock has landed and phase 6's confirmation has passed; open. Phase 6 runs
+  to its confirmation without it.
+* **Completion.** This PLAN stays `in-progress`; it completes when phase 6's acceptance is met. The phase 5 entry's sentence that it
+  completes when the owner has decided what follows the report is annotated as superseded. The report's own sentence to the same
+  effect is the report's record of its time, and is left as it is.
+* **Touched:**
+  * the MADR: the first decision's consequence "a passing run takes no longer" (an annotation); a new section, "Amendment
+    2026-11-16, after phase 5's report: the four bulk tests one at a time", with what F7 turned out to be, the decision, its
+    drivers, consequences and confirmation, and question 6;
+  * this PLAN: Goal (an addition); Scope, "Order and review, amended" (an addition) and "Where the race gates run, after the lock"
+    (new); phase 5's acceptance (an annotation); phase 6 (new); Verification (a table added); "Question after the report, open"
+    (new); the phase 5 entry's completion sentence (an annotation); this entry;
+  * `docs/README.md`: the MADR's and this PLAN's rows.

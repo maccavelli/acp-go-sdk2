@@ -267,6 +267,9 @@ measurement. The two 56 MiB tests stay with phase 5's report.
 * Good, because the cause is removed for the class, not for one test (F6), which a fifth one-test fix would leave behind.
 * Good, because each amended test keeps its assertion, and the planted product break still fails it (F5).
 * Good, because a passing run takes no longer; a test whose exit is seen late now passes up to `slack` later instead of failing.
+  *Annotated 2026-11-16, after phase 5's report:* true of a test whose wait ends when the exit is seen; not of a test that waits
+  a grace, or a bound stated in graces, out by design, which now waits 3 s where it waited 300 ms. `agentproc`'s time in CI's
+  step without `-race` rose from about 8 s to about 20 s at `f102c5a` (the amendment "after phase 5's report", below).
 * Neutral, because the product's behaviour and its default grace do not change; its docs say what the code does, by question 4's answer.
 * Bad, because a test that waits a grace out and then needs an exit seen within the next, as `TestCloseLadder/exits_on_SIGTERM`
   does, then takes about `slack`, 3 s, a run instead of 300 ms; it runs in parallel with the package's others.
@@ -487,3 +490,87 @@ Recorded as the coordinator's applications, not the owner's rulings:
      and grace-stated bound have moved; if it stops failing, it stays at 3 s and the record says why. Not chosen: rescale it now
      with the other four; leave it to the report. W5's exclusion of G7's fixed wait is lifted to that extent: it is measured in
      phase 1b, and rescaled only on that condition.
+
+## Amendment 2026-11-16, after phase 5's report: the four bulk tests one at a time
+
+Phase 5's report,
+[0057-REPORT-agentproc-56-mib-tests-30s-bound-measured.md](../reports/0057-REPORT-agentproc-56-mib-tests-30s-bound-measured.md),
+committed as `a82d483`, measured F7 and the two readiness waits counted apart with it; the owner decided on it the same day. The
+decisions above stand; this amendment adds to them. Line numbers are `a82d483`'s.
+
+### What F7 turned out to be
+
+From the report, which holds the measurements; nothing here is measured again:
+
+* **The four waits.** `TestDetachedTapIsPrefix` (`agentproc/tap_test.go:353`), `TestInProcessDetachedTapIsPrefix`
+  (`agentproc/inprocess_test.go:444`), `TestBlockedTapDetached` (`tap_test.go:311`) and `TestTapDrainBoundedByGrace`
+  (`tap_test.go:438`) each wait, under `readyWait`'s 30 s, for the connection to read 56, 56, 48 and 24 MiB.
+* **What the wait is.** Under `-race`, the connection's own work on each 1 MiB line, `json.Valid` and the envelope's
+  `json.Unmarshal`, 78 to 99 % of the wait in every condition measured; not the tap, the pipe, the child's write size or
+  `GOMAXPROCS`. Alone and idle no wait comes near 30 s on any of the three hosts (12.3 s at most, the Linux host).
+* **What moves it.** How many of the four read at once: on the Linux host `TestDetachedTapIsPrefix` waits 10.6 s alone, 25.3 s
+  with the four together and 25.8 s beside the module (2 of 10 rounds over 30 s); on the Windows laptop 4.5 s alone and 41.3 s in
+  the whole package (10 of 10 rounds over 30 s). One test-only lock, from launch to "ready", brought the Windows package's waits to
+  6.8 to 14.0 s (medians; 18.5 s at most, 16 runs) and the Linux host's longest beside the module to 24.0 s (7 rounds).
+* **Under the in-process starved load** the wait is 90 to 116 s in 5 of 5 rounds, and the serialised variant was not run there.
+* **The 5 s grace** of the two 56 MiB tests' `Close`: the first step waits for the connection to read the agent's last 8 MiB, 2.8
+  and 3.5 s (medians) beside the module on the Linux host, over 5 s in 1 of 20 runs (5.9 s), and 12 to 18 s under the starved load.
+* **CI** passed the race step in 52 of 52 Linux and Windows jobs; no defect of the tap was found.
+
+### The owner's decision
+
+* **"Run the four tests one at a time"**, the owner's ruling, relayed by the coordinator. As put to the owner: a test-only lock so
+  the four never read their megabytes at once; assertions, bounds and data stay as they are; measured on scratch, Windows waits fell
+  from 19 to 41 s to 7 to 14 s (18.5 s at most) and the Linux machine's longest from 32.8 s to 24.0 s; not shown to help under the
+  artificial starved load; a small new phase with its own proof and confirmation rounds. It is the report's option B, the one it
+  recommended. Options not chosen, as shown: one at a time and also rescale for the starved load (the figures would be minutes);
+  leave them and keep the race gate on this Mac. The report's options C (less data under `-race`) and E (a record about the
+  connection's per-line scanning) were listed in the report and were not put to the owner as choices.
+* **What the decision leaves.** The owner has not asked that these four tests pass under the in-process starved load. Under that
+  load they stay counted apart, as today. This amendment does not extend the decision to it.
+
+### Decision drivers, for this amendment
+
+* Test-only: no product code changes.
+* The 30 s bound keeps its meaning: a wait for one test's own megabytes, not for four tests' at once.
+* The data size the earlier decision fixed is untouched: 56 MiB, to pass the tap's 32 MiB queue
+  ([0030-MADR-record-initialize-on-arrival.md](0030-MADR-record-initialize-on-arrival.md), the amendment of 2026-10-21, questions
+  9 and 10).
+* It acts on the factor the measurements move most, how many of the four read at once.
+
+### Consequences, for this amendment
+
+* Good, because the Windows laptop's package and the Linux host's module runs, where the four failed at 30 s, measured under
+  30 s with the lock in the report's scratch runs.
+* Bad, because the package's time grows a little: about 3 s a round on the Windows laptop (the report), and a test waiting for
+  the lock holds one of the package's parallel slots while it waits.
+* Bad, because the starved load is not covered: the four stay counted apart under it.
+* Neutral, because the two 56 MiB tests' 5 s `Close` grace is not part of the decision; whether the lock must also cover their last
+  8 MiB is measured first, in the PLAN's phase 6.
+* *A cost of the first decision, found by the report:* `agentproc`'s time in CI's step without `-race` rose from about 8 s to
+  about 20 s at `f102c5a` (the report, "The machines", the paragraph after its CI table), which phase 4 did not see because it
+  recorded the race step only. Read, not measured: the first decision's tests that wait a grace or a bound stated in graces out by
+  design (class B's first step, the context bounds of `closecontext_test.go`, the watcher's grace for an escaped descendant's
+  output) now wait 3 s where they waited 300 ms. The PLAN's phase 6 explains it by test and by seconds, and says whether anything
+  reduces it without weakening a test.
+
+### Confirmation, for this amendment
+
+* Each of the four seen to fail at `HEAD` under a condition the lock removes, and to pass with the lock; the break "one of the four
+  does not take the lock" seen to fail the same way.
+* Phase 4's rounds again with the lock, on the Linux host and the Windows laptop, the four judged as every other test there but
+  under the starved load; this Mac's module race gate; CI's six jobs.
+* A serialised test over 30 s in a confirmation round is a stop for the owner, not a larger bound.
+
+### Question, after the report
+
+6. **Where the race gates run, once the lock has landed and phase 6's confirmation has passed.** The report's evidence for the
+   lock on the Linux host is 7 module rounds, all under 30 s (24.0 s at most); on the Windows laptop 4 package rounds, 16 runs,
+   all under 19 s.
+   * (a) Recommended: the four are judged on the Linux host and the Windows laptop like every other test, so a failure of one there
+     is a finding that stops a phase; the race gate of record stays this Mac's module run; under the starved load the four stay
+     counted apart. Cost: phase 6's 20 rounds on each host before the rule takes effect.
+   * (b) As (a), and the Linux host's module run and the Windows laptop's package run become race gates of record beside this Mac's.
+     Cost: a gate resting on 20 rounds, where the Linux host's unlocked failure rate was 2 in 10.
+   * (c) Keep the four counted apart on both hosts, as evidence, until a longer series (for example 50 rounds each) is run. Cost:
+     the lock's effect stays unjudged in the gates.
