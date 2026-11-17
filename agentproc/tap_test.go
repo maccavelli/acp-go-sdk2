@@ -183,16 +183,24 @@ func blockedTap(t *testing.T) (*capture, func()) {
 	return &capture{gate: gate}, release
 }
 
+// tappedFramesGrace is tappedFrames' grace, which Close's first step, the
+// watcher's read of the agent's output and the drain of the taps each wait
+// at most: 28 s, five times the worst drain measured, 5.60 s, beside the
+// whole module and under the in-process load, in 0057-PLAN's phase 1b. It is
+// a bound, not a grace a passing run waits out.
+const tappedFramesGrace = 28 * time.Second
+
 // tappedFrames runs the "frames" agent with both taps, a 1 MiB limit, and an
 // output tap that takes 1 ms a write, so that Wait must wait for it to drain,
 // and returns what each tap received once Close has returned. Its grace is
-// slack, not testGrace: Wait gives the taps up to the grace to drain, and a
-// loaded runner under -race has held this tap past 300 ms
-// (0030-PLAN-record-initialize-on-arrival.md, step 12).
+// tappedFramesGrace, not testGrace: Wait gives the taps up to the grace to
+// drain, and a loaded runner under -race has held this tap past 300 ms
+// (0030-PLAN-record-initialize-on-arrival.md, step 12) and past 3 s
+// (0057-MADR-agentproc-test-graces-on-a-loaded-runner.md, W2).
 func tappedFrames(t *testing.T) (output, input []byte, p *Process) {
 	t.Helper()
 	out, in := &capture{delay: time.Millisecond}, &capture{}
-	p = startTapped(t, "frames", nil, slack, out, in, acp.WithMaxMessageSize(1<<20))
+	p = startTapped(t, "frames", nil, tappedFramesGrace, out, in, acp.WithMaxMessageSize(1<<20))
 	// The connection has read and answered the two lines it refuses.
 	deadline := time.Now().Add(readyWait)
 	for strings.Count(string(in.bytes()), "\n") < 2 {
@@ -236,13 +244,28 @@ func TestInputTapSeesWrites(t *testing.T) {
 	}
 }
 
+// tapErrorWait bounds TestTapErrorIgnored's Wait: the client's handling of
+// the burst agent's 1000 updates, which took up to 7.67 s beside the whole
+// module and under the in-process load, with the bound lifted, in
+// 0057-PLAN's phase 1b; five times that, rounded up to a whole second. It is
+// a bound, not a grace.
+const tapErrorWait = 39 * time.Second
+
+// lastOutputGrace is TestCloseReadsTheAgentsLastOutput's grace: 42 s, five
+// times the longest Close's first step measured, 8.30 s, beside the whole
+// module and under the in-process load, in 0057-PLAN's phase 1b. It is a
+// bound, not a grace a passing run waits out.
+const lastOutputGrace = 42 * time.Second
+
 // TestTapErrorIgnored requires taps whose every Write fails to leave the
 // connection whole: the burst agent's updates all reach the client, and Wait
-// returns nil, as without them.
+// returns nil, as without them. It runs under exitGrace, for Wait's nil needs
+// the copy of the agent's standard error done within WaitDelay of its exit,
+// and its Wait is bounded by tapErrorWait.
 func TestTapErrorIgnored(t *testing.T) {
 	t.Parallel()
 	client := &testClient{}
-	p, err := (&Command{Cmd: agentCmd("burst"), Grace: testGrace, OutputTap: failing{}, InputTap: failing{}}).Start(client)
+	p, err := (&Command{Cmd: agentCmd("burst"), Grace: exitGrace, OutputTap: failing{}, InputTap: failing{}}).Start(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +276,7 @@ func TestTapErrorIgnored(t *testing.T) {
 	if err := p.Conn().Connection().SendNotification(t.Context(), "_test/go", map[string]any{}); err != nil {
 		t.Fatalf("SendNotification = %v", err)
 	}
-	if _, err := within(t, slack, "Wait", p.Wait); err != nil {
+	if _, err := within(t, tapErrorWait, "Wait", p.Wait); err != nil {
 		t.Fatalf("Wait = %v, want nil", err)
 	}
 	if n := client.updates.Load(); n != burstCount {
@@ -289,7 +312,7 @@ func TestBlockedTapDetached(t *testing.T) {
 	t.Parallel()
 	tap, release := blockedTap(t)
 	// The agent says it is ready once it has written its 48 MiB.
-	p, ready := launchTapped(t, "bulk", []string{bulkEnv + "=48", bulkMoreEnv + "=0"}, testGrace, tap, nil)
+	p, ready := launchTapped(t, "bulk", []string{bulkEnv + "=48", bulkMoreEnv + "=0"}, exitGrace, tap, nil)
 	t.Cleanup(release)
 	awaitReady(t, "bulk", ready)
 	// At most the pipe's capacity, and a read's, are still unread.
@@ -308,7 +331,7 @@ func TestBlockedTapDetached(t *testing.T) {
 	if err := p.Conn().Connection().SendNotification(t.Context(), "_test/go", map[string]any{}); err != nil {
 		t.Fatalf("SendNotification = %v", err)
 	}
-	if _, err := within(t, testGrace+slack, "Close", p.Close); err != nil {
+	if _, err := within(t, exitGrace+slack, "Close", p.Close); err != nil {
 		t.Fatalf("Close = %v", err)
 	}
 	release()
@@ -374,7 +397,7 @@ func TestCloseReadsTheAgentsLastOutput(t *testing.T) {
 	tap := &capture{}
 	c := &Command{
 		Cmd:               cmd,
-		Grace:             5 * time.Second,
+		Grace:             lastOutputGrace,
 		OutputTap:         tap,
 		ConnectionOptions: []acp.ConnectionOption{acp.WithLogger(slog.New(slog.DiscardHandler))},
 		readHook: func() {
@@ -415,13 +438,13 @@ func TestCloseReadsTheAgentsLastOutput(t *testing.T) {
 func TestTapDrainBoundedByGrace(t *testing.T) {
 	t.Parallel()
 	tap, release := blockedTap(t)
-	p := startTapped(t, "bulk", []string{bulkEnv + "=24", bulkMoreEnv + "=0"}, testGrace, tap, nil)
+	p := startTapped(t, "bulk", []string{bulkEnv + "=24", bulkMoreEnv + "=0"}, exitGrace, tap, nil)
 	// Registered after startTapped's Close, so that it runs first.
 	t.Cleanup(release)
 	if err := p.Conn().Connection().SendNotification(t.Context(), "_test/go", map[string]any{}); err != nil {
 		t.Fatalf("SendNotification = %v", err)
 	}
-	if _, err := within(t, testGrace+slack, "Close", p.Close); err != nil {
+	if _, err := within(t, exitGrace+slack, "Close", p.Close); err != nil {
 		t.Fatalf("Close = %v", err)
 	}
 	if out, _ := p.DroppedTapBytes(); out == 0 {

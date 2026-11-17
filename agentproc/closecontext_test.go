@@ -54,15 +54,15 @@ func hang(t *testing.T, c *hungClient, start func(*testing.T, *hungClient) *Proc
 	return p, release
 }
 
-// hungInProcess runs, in process, a ScriptAgent whose one turn sends a
-// session update, served by serve, and prompts it.
-func hungInProcess(serve func(context.Context, acp.Agent, io.Reader, io.Writer) error) func(*testing.T, *hungClient) *Process {
+// hungInProcess runs, in process, under grace, a ScriptAgent whose one turn
+// sends a session update, served by serve, and prompts it.
+func hungInProcess(grace time.Duration, serve func(context.Context, acp.Agent, io.Reader, io.Writer) error) func(*testing.T, *hungClient) *Process {
 	return func(t *testing.T, c *hungClient) *Process {
 		t.Helper()
 		agent := &acptest.ScriptAgent{Turns: []acptest.Turn{{
 			Updates: []acp.SessionUpdate{acp.UpdateAgentMessageText("hi")}, StopReason: acp.StopReasonEndTurn,
 		}}}
-		p, err := (&InProcess{Grace: testGrace, Serve: func(ctx context.Context, in io.Reader, out io.Writer) error {
+		p, err := (&InProcess{Grace: grace, Serve: func(ctx context.Context, in io.Reader, out io.Writer) error {
 			return serve(ctx, agent, in, out)
 		}, ConnectionOptions: []acp.ConnectionOption{acp.WithLogger(slog.New(slog.DiscardHandler))}}).Start(c)
 		if err != nil {
@@ -92,10 +92,10 @@ func serveAgentNil(ctx context.Context, agent acp.Agent, in io.Reader, out io.Wr
 }
 
 // hungChild runs the test binary's "burst" agent, which writes burstCount
-// session updates and exits at once.
+// session updates and exits at once, under exitGrace.
 func hungChild(t *testing.T, c *hungClient) *Process {
 	t.Helper()
-	p := start(t, "burst", c)
+	p := startCmdGrace(t, agentCmd("burst"), "burst", c, exitGrace)
 	if _, err := p.Conn().Initialize(t.Context(), acp.InitializeRequest{}); err != nil {
 		t.Fatalf("Initialize = %v", err)
 	}
@@ -104,6 +104,14 @@ func hungChild(t *testing.T, c *hungClient) *Process {
 	}
 	return p
 }
+
+// releasedWait bounds the Wait that follows a handler's release in
+// TestCloseContextBoundsHandlers: the connection hands the client's handler
+// the rest of the agent's 1000 updates, which took up to 6.82 s with the
+// bound lifted, in the child's CloseContext subtest, beside the whole module
+// and under the in-process load (0057-PLAN's phase 1b); five times that,
+// rounded up to a whole second. It is a bound, not a grace.
+const releasedWait = 35 * time.Second
 
 // isClosed reports whether c is closed.
 func isClosed(c <-chan struct{}) bool {
@@ -122,13 +130,15 @@ func isClosed(c <-chan struct{}) bool {
 // Done is closed. Once the handler is released, Wait returns that agent's
 // error, which Close or Kill would have returned
 // (0042-MADR-in-process-agent-runner.md, the amendment of 2026-10-30, X1, X2).
+// Each agent runs under exitGrace, and the bound, in graces, with it; the Wait
+// after the release is bounded by releasedWait.
 func TestCloseContextBoundsHandlers(t *testing.T) {
 	t.Parallel()
 	for _, agent := range []struct {
 		name  string
 		start func(*testing.T, *hungClient) *Process
 	}{
-		{"in process", hungInProcess(serveAgentNil)},
+		{"in process", hungInProcess(exitGrace, serveAgentNil)},
 		{"a child", hungChild},
 	} {
 		for _, m := range []struct {
@@ -142,10 +152,10 @@ func TestCloseContextBoundsHandlers(t *testing.T) {
 			t.Run(agent.name+", "+m.name, func(t *testing.T) {
 				t.Parallel()
 				p, release := hang(t, newHungClient(), agent.start)
-				const bound = testGrace
+				const bound = exitGrace
 				ctx, cancel := context.WithTimeout(context.Background(), bound)
 				defer cancel()
-				took, err := within(t, bound+testGrace+slack, m.name, func() error { return m.stop(p, ctx) })
+				took, err := within(t, bound+exitGrace+slack, m.name, func() error { return m.stop(p, ctx) })
 				if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, acp.ErrHandlersRunning) {
 					t.Errorf("%s = %v after %v, want the bound's cause and acp.ErrHandlersRunning", m.name, err, took)
 				}
@@ -153,7 +163,7 @@ func TestCloseContextBoundsHandlers(t *testing.T) {
 					t.Errorf("Done is open after %s returned: the agent must have ended", m.name)
 				}
 				release()
-				_, werr := within(t, slack, "Wait", p.Wait)
+				_, werr := within(t, releasedWait, "Wait", p.Wait)
 				// The agent exits 0 of itself at its input's end; killed, it
 				// may have exited first, or not.
 				if werr != nil && (!m.killed || !errors.Is(werr, ErrKilled)) {
@@ -173,13 +183,13 @@ func TestCloseContextBoundsHandlers(t *testing.T) {
 // amendment of 2026-10-30, the alternatives for X1).
 func TestCloseContextJoinsTheAgentsError(t *testing.T) {
 	t.Parallel()
-	p, _ := hang(t, newHungClient(), hungInProcess(func(ctx context.Context, agent acp.Agent, in io.Reader, out io.Writer) error {
+	p, _ := hang(t, newHungClient(), hungInProcess(exitGrace, func(ctx context.Context, agent acp.Agent, in io.Reader, out io.Writer) error {
 		_ = acp.ServeAgent(ctx, agent, in, out)
 		return errServe
 	}))
-	ctx, cancel := context.WithTimeout(context.Background(), testGrace)
+	ctx, cancel := context.WithTimeout(context.Background(), exitGrace)
 	defer cancel()
-	_, err := within(t, 2*testGrace+slack, "CloseContext", func() error { return p.CloseContext(ctx) })
+	_, err := within(t, 2*exitGrace+slack, "CloseContext", func() error { return p.CloseContext(ctx) })
 	want := errors.Join(context.DeadlineExceeded, acp.ErrHandlersRunning, errServe)
 	if !errors.Is(err, errServe) || err.Error() != want.Error() {
 		t.Errorf("CloseContext = %v, want %v: Serve's own error joined", err, want)
@@ -192,10 +202,10 @@ func TestCloseContextJoinsTheAgentsError(t *testing.T) {
 func TestCloseContextWaitsForHandlers(t *testing.T) {
 	t.Parallel()
 	c := newHungClient()
-	p, release := hang(t, c, hungInProcess(serveAgentNil))
+	p, release := hang(t, c, hungInProcess(exitGrace, serveAgentNil))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	time.AfterFunc(testGrace/2, release)
+	time.AfterFunc(exitGrace/2, release)
 	took, err := within(t, 5*time.Second+slack, "CloseContext", func() error { return p.CloseContext(ctx) })
 	if err != nil {
 		t.Errorf("CloseContext = %v after %v, want Wait's, nil", err, took)
@@ -241,11 +251,11 @@ func TestCloseContextHurriesTheSteps(t *testing.T) {
 // the one CloseContext returns.
 func TestCloseContextCause(t *testing.T) {
 	t.Parallel()
-	p, _ := hang(t, newHungClient(), hungInProcess(serveAgentNil))
+	p, _ := hang(t, newHungClient(), hungInProcess(exitGrace, serveAgentNil))
 	why := errors.New("the test's bound")
-	ctx, cancel := context.WithTimeoutCause(context.Background(), testGrace, why)
+	ctx, cancel := context.WithTimeoutCause(context.Background(), exitGrace, why)
 	defer cancel()
-	_, err := within(t, 2*testGrace+slack, "CloseContext", func() error { return p.CloseContext(ctx) })
+	_, err := within(t, 2*exitGrace+slack, "CloseContext", func() error { return p.CloseContext(ctx) })
 	if !errors.Is(err, why) || errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, acp.ErrHandlersRunning) {
 		t.Errorf("CloseContext = %v, want the cause %q, not context.DeadlineExceeded, and acp.ErrHandlersRunning", err, why)
 	}
@@ -259,7 +269,7 @@ func TestCloseContextCause(t *testing.T) {
 func TestCloseContextNotHandlers(t *testing.T) {
 	t.Parallel()
 	tap, release := blockedTap(t)
-	p, _ := launchTapped(t, "burst", nil, 2*time.Second, tap, nil)
+	p, _ := launchTapped(t, "burst", nil, exitGrace, tap, nil)
 	t.Cleanup(release)
 	if _, err := p.Conn().Initialize(t.Context(), acp.InitializeRequest{}); err != nil {
 		t.Fatalf("Initialize = %v", err)
@@ -282,7 +292,7 @@ func TestCloseContextNotHandlers(t *testing.T) {
 	const bound = 100 * time.Millisecond
 	ctx, cancelBound := context.WithTimeout(context.Background(), bound)
 	defer cancelBound()
-	took, err := within(t, 2*time.Second+slack, "CloseContext", func() error { return p.CloseContext(ctx) })
+	took, err := within(t, exitGrace+slack, "CloseContext", func() error { return p.CloseContext(ctx) })
 	if err == nil || err.Error() != context.DeadlineExceeded.Error() || errors.Is(err, acp.ErrHandlersRunning) {
 		t.Errorf("CloseContext = %v after %v, want the bound's cause alone, without acp.ErrHandlersRunning", err, took)
 	}
@@ -297,7 +307,7 @@ func TestCloseContextNotHandlers(t *testing.T) {
 // left once the handler that held it returns.
 func TestCloseContextOneGoroutine(t *testing.T) {
 	t.Parallel()
-	p, release := hang(t, newHungClient(), hungInProcess(serveAgentNil))
+	p, release := hang(t, newHungClient(), hungInProcess(testGrace, serveAgentNil))
 	const label = "TestCloseContextOneGoroutine"
 	pprof.Do(context.Background(), pprof.Labels("test", label), func(context.Context) {
 		ended, cancel := context.WithCancel(context.Background())

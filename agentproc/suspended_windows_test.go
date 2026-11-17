@@ -25,9 +25,9 @@ import (
 func TestDescendantInJobDespiteSlowAttach(t *testing.T) {
 	attachDelay.Store(int64(200 * time.Millisecond))
 	t.Cleanup(func() { attachDelay.Store(0) })
-	p, beat := startBeating(t, "parent")
+	p, beat := startBeatingGrace(t, "parent", exitGrace)
 	t.Cleanup(func() { endBeat(beat) })
-	if _, err := within(t, testGrace+slack, "Close", p.Close); err != nil {
+	if _, err := within(t, exitGrace+slack, "Close", p.Close); err != nil {
 		t.Errorf("Close = %v, want nil", err)
 	}
 	if beating(beat) {
@@ -73,7 +73,7 @@ func TestCallersCreationFlagsKept(t *testing.T) {
 	t.Parallel()
 	cmd := agentCmd("eof")
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP}
-	p := startCmd(t, cmd, "eof", &testClient{})
+	p := startCmdGrace(t, cmd, "eof", &testClient{}, exitGrace)
 	if f := cmd.SysProcAttr.CreationFlags; f&windows.CREATE_NEW_PROCESS_GROUP == 0 || f&windows.CREATE_SUSPENDED == 0 {
 		t.Errorf("CreationFlags = %#x, want the caller's CREATE_NEW_PROCESS_GROUP and CREATE_SUSPENDED", f)
 	}

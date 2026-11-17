@@ -65,12 +65,14 @@ func TestTailWriterForwards(t *testing.T) {
 }
 
 // startStderrFail starts the "stderr-fail" child with the caps and the join,
-// the caller's Stderr set to next, and returns it once it has exited.
+// the caller's Stderr set to next, and returns it once it has exited. It runs
+// under exitGrace: both its callers need the copy of the child's standard
+// error done within WaitDelay, half the grace, of its exit.
 func startStderrFail(t *testing.T, bytes, lines int, join bool, next io.Writer) (*Process, error) {
 	t.Helper()
 	cmd := agentCmd("stderr-fail")
 	cmd.Stderr = next
-	p, err := (&Command{Cmd: cmd, Grace: testGrace, StderrTail: bytes, StderrTailLines: lines, JoinStderrTail: join}).Start(&testClient{})
+	p, err := (&Command{Cmd: cmd, Grace: exitGrace, StderrTail: bytes, StderrTailLines: lines, JoinStderrTail: join}).Start(&testClient{})
 	if err != nil {
 		t.Fatal(err)
 	}

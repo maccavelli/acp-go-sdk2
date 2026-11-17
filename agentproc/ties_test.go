@@ -30,10 +30,17 @@ func beating(path string) bool {
 // test's directory, and returns once the child is ready and the file grows.
 func startBeating(t *testing.T, mode string) (*Process, string) {
 	t.Helper()
+	return startBeatingGrace(t, mode, testGrace)
+}
+
+// startBeatingGrace is startBeating under grace, which a test that needs an
+// exit seen within one sets to exitGrace.
+func startBeatingGrace(t *testing.T, mode string, grace time.Duration) (*Process, string) {
+	t.Helper()
 	beat := filepath.Join(t.TempDir(), "beat")
 	cmd := agentCmd(mode)
 	cmd.Env = append(cmd.Env, beatEnv+"="+beat)
-	p := startCmd(t, cmd, mode, &testClient{})
+	p := startCmdGrace(t, cmd, mode, &testClient{}, grace)
 	if !beating(beat) {
 		t.Fatalf("the %s agent's beat grandchild is not writing", mode)
 	}
@@ -51,8 +58,8 @@ func TestDescendantsEnded(t *testing.T) {
 	}
 	t.Run("the agent exits at its input's end", func(t *testing.T) {
 		t.Parallel()
-		p, beat := startBeating(t, "parent")
-		if _, err := within(t, testGrace+slack, "Close", p.Close); err != nil {
+		p, beat := startBeatingGrace(t, "parent", exitGrace)
+		if _, err := within(t, exitGrace+slack, "Close", p.Close); err != nil {
 			t.Errorf("Close = %v, want nil", err)
 		}
 		if beating(beat) {
@@ -76,11 +83,11 @@ func TestDescendantsEnded(t *testing.T) {
 		beat := filepath.Join(t.TempDir(), "beat")
 		cmd := agentCmd("parent-exit")
 		cmd.Env = append(cmd.Env, beatEnv+"="+beat)
-		p := startCmd(t, cmd, "parent-exit", &testClient{})
+		p := startCmdGrace(t, cmd, "parent-exit", &testClient{}, exitGrace)
 		if fi, err := os.Stat(beat); err != nil || fi.Size() == 0 {
 			t.Fatalf("the agent's grandchild never wrote: %v", err)
 		}
-		if _, err := within(t, testGrace+slack, "Wait", p.Wait); err != nil {
+		if _, err := within(t, exitGrace+slack, "Wait", p.Wait); err != nil {
 			t.Errorf("Wait = %v, want nil", err)
 		}
 		select {
@@ -107,7 +114,7 @@ func TestExitedFirst(t *testing.T) {
 		for i := range 50 {
 			cmd := agentCmd(mode)
 			cmd.Env = append(cmd.Env, beatEnv+"="+filepath.Join(t.TempDir(), "beat"))
-			p := startCmd(t, cmd, mode, &testClient{})
+			p := startCmdGrace(t, cmd, mode, &testClient{}, exitGrace)
 			select {
 			case <-p.Done():
 			case <-time.After(readyWait):
@@ -117,7 +124,7 @@ func TestExitedFirst(t *testing.T) {
 			if p.ExitedFirst() {
 				t.Fatalf("run %d: ExitedFirst before Wait = true, want false", i)
 			}
-			if _, err := within(t, testGrace+slack, "Wait", p.Wait); err != nil {
+			if _, err := within(t, exitGrace+slack, "Wait", p.Wait); err != nil {
 				t.Fatalf("run %d: Wait = %v, want nil", i, err)
 			}
 			if got := p.ExitedFirst(); got != want {
@@ -144,7 +151,7 @@ func TestCallersCommandKept(t *testing.T) {
 	cmd := agentCmd("where")
 	cmd.Env = append(cmd.Env, beatEnv+"="+out, "AGENTPROC_TEST_VALUE=the caller's")
 	cmd.Dir = dir
-	p := startCmd(t, cmd, "where", &testClient{})
+	p := startCmdGrace(t, cmd, "where", &testClient{}, exitGrace)
 	if err := p.Close(); err != nil {
 		t.Fatalf("Close = %v", err)
 	}
@@ -198,7 +205,7 @@ func TestConnectionEndStopsAgent(t *testing.T) {
 		cmd := agentCmd("flood")
 		// The close is OverflowCloseConnection's, which is no longer the
 		// default (0044-MADR-notification-queue-back-pressure.md, D9).
-		p, err := (&Command{Cmd: cmd, Grace: testGrace, ConnectionOptions: []acp.ConnectionOption{
+		p, err := (&Command{Cmd: cmd, Grace: exitGrace, ConnectionOptions: []acp.ConnectionOption{
 			acp.WithMaxQueuedNotifications(1), acp.WithNotificationOverflowPolicy(acp.OverflowCloseConnection),
 		}}).Start(client)
 		if err != nil {
@@ -213,7 +220,7 @@ func TestConnectionEndStopsAgent(t *testing.T) {
 		}
 		select {
 		case <-p.Done():
-		case <-time.After(testGrace + slack):
+		case <-time.After(exitGrace + slack):
 			t.Fatal("the agent still runs after its connection overflowed")
 		}
 		if err := p.Conn().Err(); !errors.Is(err, acp.ErrNotificationQueueOverflow) {

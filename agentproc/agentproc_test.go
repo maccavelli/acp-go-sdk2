@@ -23,6 +23,27 @@ const testGrace = 300 * time.Millisecond
 // runner.
 const slack = 3 * time.Second
 
+// exitGrace is the grace of a test that needs an agent's exit, the drain of
+// its taps, or an in-process Serve's return, seen within the first wait a
+// grace bounds, which a loaded runner under -race has not met in testGrace:
+// the agent exits at its input's end within Close's first step, or of itself
+// within WaitDelay, half the grace; or it exits on SIGTERM within the second
+// step, which waits the first out (class B, whose bounds in graces scale with
+// it). It is slack, the suite's bound for a step on a busy runner. A test
+// that waits graces out and asserts only a floor, a kill, or ErrTerminated
+// or ErrKilled either way keeps testGrace, as does one with no grace in its
+// outcome, so that the ladder tests still measure the steps. A test already
+// under slack or more keeps its grace. See
+// 0057-MADR-agentproc-test-graces-on-a-loaded-runner.md and the PLAN's rule.
+const exitGrace = slack
+
+// burstWait bounds TestNoLostOutput's Wait: the client's handling of the burst
+// agent's 1000 updates, which took up to 6.92 s beside the whole module and
+// under the in-process load, with the bound lifted, in 0057-PLAN's phase 1b;
+// five times that, rounded up to a whole second. It is a bound, not a grace:
+// a passing run is no slower.
+const burstWait = 35 * time.Second
+
 // descendantGrace is TestStderrHeldByDescendant's grace. Start sets WaitDelay
 // to half of it, and the agent is seen to exit only once WaitDelay has passed
 // after its exit, so its exit must be seen within the other half of Close's
@@ -82,9 +103,16 @@ func start(t *testing.T, mode string, client acp.Client) *Process {
 // startCmd is start for a command the test has adjusted.
 func startCmd(t *testing.T, cmd *exec.Cmd, mode string, client acp.Client) *Process {
 	t.Helper()
+	return startCmdGrace(t, cmd, mode, client, testGrace)
+}
+
+// startCmdGrace is startCmd under grace, which a test that needs an exit seen
+// within one sets to exitGrace.
+func startCmdGrace(t *testing.T, cmd *exec.Cmd, mode string, client acp.Client, grace time.Duration) *Process {
+	t.Helper()
 	w := &readyWriter{ready: make(chan struct{})}
 	cmd.Stderr = w
-	p, err := (&Command{Cmd: cmd, Grace: testGrace}).Start(client)
+	p, err := (&Command{Cmd: cmd, Grace: grace}).Start(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,11 +186,14 @@ func TestStartRefuses(t *testing.T) {
 
 // TestNoLostOutput requires every message the agent writes before it exits
 // to reach the client: the agent writes burstCount session updates and exits
-// at once (0027-MADR-agent-process-helper.md, P1, P2).
+// at once (0027-MADR-agent-process-helper.md, P1, P2). It runs under
+// exitGrace, for Wait's nil needs the copy of the agent's standard error done
+// within WaitDelay of its exit and its output read within the grace of it; and
+// its Wait is bounded by burstWait.
 func TestNoLostOutput(t *testing.T) {
 	t.Parallel()
 	client := &testClient{}
-	p := start(t, "burst", client)
+	p := startCmdGrace(t, agentCmd("burst"), "burst", client, exitGrace)
 	if _, err := p.Conn().Initialize(t.Context(), acp.InitializeRequest{}); err != nil {
 		t.Fatalf("Initialize = %v", err)
 	}
@@ -171,7 +202,7 @@ func TestNoLostOutput(t *testing.T) {
 	if err := p.Conn().Connection().SendNotification(t.Context(), "_test/go", map[string]any{}); err != nil {
 		t.Fatalf("SendNotification = %v", err)
 	}
-	_, err := within(t, slack, "Wait", p.Wait)
+	_, err := within(t, burstWait, "Wait", p.Wait)
 	if err != nil {
 		t.Fatalf("Wait = %v, want nil", err)
 	}
@@ -189,24 +220,24 @@ func TestCloseLadder(t *testing.T) {
 	t.Parallel()
 	t.Run("exits at its input's end", func(t *testing.T) {
 		t.Parallel()
-		p := start(t, "eof", &testClient{})
-		took, err := within(t, slack, "Close", p.Close)
-		if err != nil || took >= testGrace {
-			t.Errorf("Close = %v after %v, want nil within the grace, %v", err, took, testGrace)
+		p := startCmdGrace(t, agentCmd("eof"), "eof", &testClient{}, exitGrace)
+		took, err := within(t, exitGrace+slack, "Close", p.Close)
+		if err != nil || took >= exitGrace {
+			t.Errorf("Close = %v after %v, want nil within the grace, %v", err, took, exitGrace)
 		}
 	})
 	t.Run("exits on SIGTERM", func(t *testing.T) {
 		t.Parallel()
-		p := start(t, "term", &testClient{})
-		took, err := within(t, testGrace*2+slack, "Close", p.Close)
+		p := startCmdGrace(t, agentCmd("term"), "term", &testClient{}, exitGrace)
+		took, err := within(t, exitGrace*2+slack, "Close", p.Close)
 		if !hasGroups {
-			if !errors.Is(err, ErrKilled) || took < testGrace {
+			if !errors.Is(err, ErrKilled) || took < exitGrace {
 				t.Errorf("Close = %v after %v, want ErrKilled after the grace", err, took)
 			}
 			return
 		}
 		var ee *exec.ExitError
-		if !errors.Is(err, ErrTerminated) || !errors.As(err, &ee) || ee.ExitCode() != 3 || took < testGrace || took >= 2*testGrace {
+		if !errors.Is(err, ErrTerminated) || !errors.As(err, &ee) || ee.ExitCode() != 3 || took < exitGrace || took >= 2*exitGrace {
 			t.Errorf("Close = %v after %v, want ErrTerminated with exit status 3 between one and two graces", err, took)
 		}
 	})

@@ -54,13 +54,13 @@ func TestKillCutsCloseShort(t *testing.T) {
 func TestKillAfterExit(t *testing.T) {
 	t.Parallel()
 	beat := filepath.Join(t.TempDir(), "beat")
-	p := startTapped(t, "parent-exit", []string{beatEnv + "=" + beat}, testGrace, nil, nil)
+	p := startTapped(t, "parent-exit", []string{beatEnv + "=" + beat}, exitGrace, nil, nil)
 	select {
 	case <-p.Done():
 	case <-time.After(readyWait):
 		t.Fatalf("the parent-exit agent had not exited %v after it was ready", readyWait)
 	}
-	_, err := within(t, testGrace+slack, "Kill", p.Kill)
+	_, err := within(t, exitGrace+slack, "Kill", p.Kill)
 	if err != nil {
 		t.Errorf("Kill = %v, want nil, the agent's exit of status 0", err)
 	}

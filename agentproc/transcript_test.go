@@ -131,7 +131,7 @@ func TestTranscriptOfSession(t *testing.T) {
 	var b lockedBuffer
 	tr := NewTranscript(&b)
 	a := &InProcess{
-		Grace:     testGrace,
+		Grace:     exitGrace,
 		InputTap:  tr.Input(),
 		OutputTap: tr.Output(),
 		Serve: func(ctx context.Context, in io.Reader, out io.Writer) error {

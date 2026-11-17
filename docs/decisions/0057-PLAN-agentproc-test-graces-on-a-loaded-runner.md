@@ -71,6 +71,7 @@ and not counted as passes or as this PLAN's failures. A failure of any other tes
 and the four of W2. `TestTapErrorIgnored` leaves the list counted apart: its fixed 3 s wait is W2's. `TestBlockedTapDetached` stays
 on it for its failure to be ready within 30 s (`tap_test.go:294`), with the two 56 MiB tests; any other failure of it counts as a
 moved test's, since its `Close` moves with class A.
+*Added 2026-11-16, after phase 2's A/B, by the owner's ruling, relayed by the coordinator, "Count it apart with the other readiness failure". As put to the owner: `TestTapDrainBoundedByGrace`'s grace move stays (its plant failed today's code and passes amended); its 30 s readiness failure ("the bulk agent did not say it was ready within 30s", `tap_test.go:441`) joins `TestBlockedTapDetached`'s for phase 5's measured report, by a dated amendment of the plan's gates; consistent with the earlier ruling "A measured report, then decide". Options not chosen: measure the readiness wait and rescale it now; revert its move.* `TestTapDrainBoundedByGrace` is counted apart for its failure to be ready within 30 s (`tap_test.go:441`), as `TestBlockedTapDetached` is; any other failure of either test counts as a moved test's.
 
 **Scope, widened** (added 2026-11-16, after phase 1's audit, by the owner's rulings "Move all four, each proved first" and "Widen
 0057 to these bounds now", each relayed by the coordinator; the MADR's amendment of that date). In scope as well: the four tests of
@@ -202,6 +203,8 @@ message. **Acceptance:** a figure for each of W2's four bounds, or its stop sent
   W2's four included.
 * **The breaks:** "the first step waits 0 s" fails each class A test whose outcome waits the first step; W2's break fails each of its
   four tests; each amended.
+* **Counted apart** (added 2026-11-16, after phase 2's A/B, by the owner's ruling, relayed by the coordinator, "Count it apart with the other readiness failure". As put to the owner: `TestTapDrainBoundedByGrace`'s grace move stays (its plant failed today's code and passes amended); its 30 s readiness failure ("the bulk agent did not say it was ready within 30s", `tap_test.go:441`) joins `TestBlockedTapDetached`'s for phase 5's measured report, by a dated amendment of the plan's gates; consistent with the earlier ruling "A measured report, then decide". Options not chosen: measure the readiness wait and rescale it now; revert its move.): the "0 of 10 amended" of the load bullet above and of this phase's acceptance is judged on every moved test's own outcome; a failure of the 30 s readiness wait in `TestTapDrainBoundedByGrace` or `TestBlockedTapDetached` is counted apart, as F7's are, and any other failure of either counts.
+* **The five figures** (added 2026-11-16, before phase 2 ran): the owner's ruling, relayed by the coordinator, "The five as measured". As put to the owner: 35 s, 39 s, 28 s, 42 s and 35 s, each from its own measurement (phase 1b's table and addendum): `TestNoLostOutput`'s `Wait` bound (`agentproc_test.go:174`) 35 s; `TestTapErrorIgnored`'s `Wait` bound (`tap_test.go:256`) 39 s; `tappedFrames`' grace (`tap_test.go:195`, `TestOutputTapVerbatim`'s drain) 28 s; `TestCloseReadsTheAgentsLastOutput`'s grace (`tap_test.go:377`) 42 s, its `within` following; the fixed `Wait` at `closecontext_test.go:156` 35 s. Phase 2's proof, 0 failures in 10 rounds under the starved load, can then hold for these tests; a passing run is no slower, and a hung wait takes up to its figure to fail. Options not chosen: one shared bound for all five; set them from the module load only. The "What moves" bullet's four bounds, and `closecontext_test.go:156`, which phase 1b's step 8 measured and found to fail still, take these figures; the margin's two results (0.8 passes, 1.2 fails) and the break are shown again on phase 2's amended files, the measured copies being phase 2's shape and not its edits.
 
 ### Phase 3: the docs (cheapest tier, medium effort)
 
@@ -244,6 +247,7 @@ and no test fails there but the F7 tests, whose failures are counted and recorde
 on this Mac; the gates pass; CI's six jobs "completed success".
 *Added 2026-11-16, after phase 1's audit:* the tests this PLAN moved include W1's four and W2's four; the tests counted apart are the
 two 56 MiB tests and `TestBlockedTapDetached`'s readiness failure ("Where the race gates run", its addition).
+*Added 2026-11-16, after phase 2's A/B:* the tests counted apart also include `TestTapDrainBoundedByGrace`'s failure to be ready within 30 s (`tap_test.go:441`), by the owner's ruling "Count it apart with the other readiness failure", relayed by the coordinator; any other failure of it, or of `TestBlockedTapDetached`, is a moved test's.
 
 ### Phase 5: the 56 MiB tests' 30 s, by question 3's answer (mid tier, high effort)
 
@@ -258,6 +262,7 @@ in parallel with phases 1 to 4. As first written, nothing here fixed its place; 
 all "the bulk agent did not say it was ready within 30s", `tap_test.go:294`) and `TestDetachedTapIsPrefix`'s failure at its 5 s grace
 in the audit's round 1 (`tap_test.go:349`). `TestTapErrorIgnored` is no longer the report's: its fixed wait is phase 1b's. Under
 question 5's answer (c), `closecontext_test.go:156` is the report's too.
+*Added 2026-11-16, after phase 2's A/B:* the report measures `TestTapDrainBoundedByGrace`'s time to be ready too (its 24 MiB bulk agent, `tap_test.go:441`, the same message as `TestBlockedTapDetached`'s), by the owner's ruling "Count it apart with the other readiness failure", relayed by the coordinator.
 
 **Acceptance:** the REPORT committed and put to the owner, who then decides what follows, as the answer "A measured report, then
 decide" says; any defect it finds left for a record of its own. Until that decision, the race gates run as "Where the race gates
@@ -1453,3 +1458,288 @@ addendum's table scripts) are scratch only, not staged, saved with the other too
 
 After the last edit, with the PLAN, the MADR and `docs/README.md` staged: `python3 -B scripts/check_records.py --check-all`,
 `python3 -B scripts/check_disclosure.py` and `markdownlint-cli2` v0.23.2, each exit 0. Staged, not committed, not pushed.
+
+### 2026-11-16: the owner's ruling on the five figures
+
+Before phase 2 ran, the coordinator relayed one more ruling on phase 1b's figures, recorded here and in phase 2's "What moves" bullet and the MADR's W2 and W3 (the amendment of that date): the owner's ruling, relayed by the coordinator, "The five as measured". As put to the owner: 35 s, 39 s, 28 s, 42 s and 35 s, each from its own measurement (phase 1b's table and addendum): `TestNoLostOutput`'s `Wait` bound (`agentproc_test.go:174`) 35 s; `TestTapErrorIgnored`'s `Wait` bound (`tap_test.go:256`) 39 s; `tappedFrames`' grace (`tap_test.go:195`, `TestOutputTapVerbatim`'s drain) 28 s; `TestCloseReadsTheAgentsLastOutput`'s grace (`tap_test.go:377`) 42 s, its `within` following; the fixed `Wait` at `closecontext_test.go:156` 35 s. Phase 2's proof, 0 failures in 10 rounds under the starved load, can then hold for these tests; a passing run is no slower, and a hung wait takes up to its figure to fail. Options not chosen: one shared bound for all five; set them from the module load only. Nothing in the tree changed by it.
+
+### 2026-11-16: the owner's ruling on the readiness failure
+
+After phase 2's A/B, the coordinator relayed one more ruling, recorded here, in the PLAN's "Where the race gates run", phase 2's "Counted apart" bullet, phase 4's acceptance and phase 5, and in the MADR at W5: the owner's ruling, relayed by the coordinator, "Count it apart with the other readiness failure". As put to the owner: `TestTapDrainBoundedByGrace`'s grace move stays (its plant failed today's code and passes amended); its 30 s readiness failure ("the bulk agent did not say it was ready within 30s", `tap_test.go:441`) joins `TestBlockedTapDetached`'s for phase 5's measured report, by a dated amendment of the plan's gates; consistent with the earlier ruling "A measured report, then decide". Options not chosen: measure the readiness wait and rescale it now; revert its move. Nothing in the tree changed by it.
+
+### 2026-11-16: phase 2 (the tests)
+
+Run by a mainstream-tier model at medium effort, as the phase prices it, on the coordinator's brief. `date +%F` printed 2026-11-16,
+the date of the earlier entries. Changed: fourteen files of `agentproc/*_test.go`, this entry and the PLAN's row in `docs/README.md`
+(and the ruling's three lines, recorded first, above). No source file, workflow, script or tool changed. Every instrument below lived
+in scratch copies made by `git archive HEAD`.
+
+* **Approval and rulings.** "Run phases 1 to 4 through; then the report" (the approval entry), "Move all four, each proved first" and
+  "Widen 0057 to these bounds now" (the entry on the audit's rulings), "Measure it; rescale only if it still fails" (question 5), and,
+  recorded before this phase ran (the entry "2026-11-16: the owner's ruling on the five figures"), the owner's ruling, relayed by the
+  coordinator, "The five as measured": the five figures 35 s, 39 s, 28 s, 42 s and 35 s; and, after the A/B (the entry above), "Count it apart with the other readiness failure". All as the earlier entries record them.
+* **Base commit.** `032320a`, `main`, level with `origin/main`, clean. Line numbers below are that tree's.
+* **Read:** this PLAN and its MADR; every `agentproc/*_test.go` and `agentproc.go`, `tap.go`, `inprocess.go`, `stderr.go`; `AGENTS.md`,
+  `tools/README.md`; phase 1b's tools (the in-process load's `init`, the margin plants and breaks, the chunk scripts), which were
+  read and then rewritten smaller for the amended files, not reused as they were.
+
+#### What changed
+
+* `agentproc_test.go`: `const exitGrace = slack`, its comment stating the rule and citing the MADR; `startCmdGrace`, which `startCmd`
+  calls with `testGrace` (`start` and `startCmd` keep it); `const burstWait = 35 * time.Second`, `TestNoLostOutput`'s `Wait` bound,
+  with its measurement in the comment; the two ladder subtests under `exitGrace`, their `within` and class B's bounds
+  (`took < exitGrace`, `took >= 2*exitGrace`) in graces.
+* `ties_test.go`: `startBeatingGrace` (`startBeating` keeps `testGrace`, so the Windows-only caller is unchanged); the moved tests
+  of `TestDescendantsEnded`, `TestExitedFirst`, `TestCallersCommandKept` and `TestConnectionEndStopsAgent` under `exitGrace`, with
+  `within(t, exitGrace+slack, ...)`.
+* `closecontext_test.go`: `hungInProcess` takes its grace (`TestCloseContextOneGoroutine`, class D, passes `testGrace`);
+  `hungChild` runs under `exitGrace`; `const bound = exitGrace` and the `within` that states it in graces, `:180` and `:246`'s
+  contexts, `TestCloseContextNotHandlers` from 2 s to `exitGrace`; `const releasedWait = 35 * time.Second` for the fixed `Wait`
+  of `:156`; `:214` stays.
+* `tap_test.go`: `const tappedFramesGrace = 28 * time.Second` (`tappedFrames`' grace, which `TestInputTapSeesWrites` shares),
+  `tapErrorWait` 39 s, `lastOutputGrace` 42 s (its `within` follows, 45 s); `TestTapErrorIgnored`, `TestBlockedTapDetached` and
+  `TestTapDrainBoundedByGrace` under `exitGrace`.
+* `inprocess_test.go`, `agentproc_unix_test.go`, `kill_test.go`, `linetap_test.go`, `pdeathsig_test.go`, `stderr_test.go`,
+  `transcript_test.go`, `waitcontext_test.go`: each moved test's grace and `within`; `TestWaitErrorSaysTheCauseOnce`'s table gains a
+  grace a case (the abandonment keeps `testGrace`).
+* `breakaway_windows_test.go`, `suspended_windows_test.go`: the three Windows-only tests (below); `breakaway` takes a grace, `Close` passing `exitGrace` and `Kill` `testGrace`.
+* A test already under `slack` or more kept its grace; tests of class C and D kept `testGrace`.
+
+#### The moved tests
+
+45 tests and subtests moved: class A 32 (of them `TestNoLostOutput` and `TestTapErrorIgnored` also carry W2's bounds), class B 6,
+W1's four, and the three more of W2 whose graces rose (`TestOutputTapVerbatim` and `TestInputTapSeesWrites` through
+`tappedFrames`, and `TestCloseReadsTheAgentsLastOutput`). W2's fifth bound, `closecontext_test.go:156`, moved in the four subtests of
+`TestCloseContextBoundsHandlers`. The five bounds: 35 s, 39 s, 28 s, 42 s (its `within`, 45 s) and 35 s. Each row: the plant that fits
+the test's wait, seen to fail at `HEAD` (the failure quoted) and to pass amended; "Amended" is the same plant on the amended tree.
+Every moved test, the three Windows-only ones included, found a plant that fails it at `HEAD`; none was reverted.
+
+| Test | Class | Grace and bounds before | After | Plant that fits | Failure seen at `HEAD` | Amended |
+| :--- | :---: | :--- | :--- | :--- | :--- | :--- |
+| `TestNoLostOutput` | A, W2 | grace 300 ms, `Wait` 3 s | grace 3 s, `Wait` 35 s | a grandchild holds stderr 1.2 s past the exit | `agentproc_test.go:176: Wait = exec: WaitDelay expired before I/O complete, want nil` | pass |
+| `TestCloseLadder/exits_at_its_input's_end` | A | 300 ms; `took` under 300 ms, `within` 3 s | 3 s; under 3 s, `within` 6 s | exit seen 350 ms late | `agentproc_test.go:195: Close = agentproc: agent terminated after 353.348958ms, want nil within the grace, 300ms` | pass |
+| `TestCloseLadder/exits_on_SIGTERM` | B | 300 ms; 300 to 600 ms | 3 s; 3 to 6 s, `within` 9 s | exit seen 350 ms late | `agentproc_test.go:210: Close = agentproc: agent killed: exit status 3 after 656.974084ms, want ErrTerminated with exit status 3 between one and two gr` | pass |
+| `TestEscapedDescendantDoesNotHoldWait` | A | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | a grandchild holds stderr 1.2 s past the exit | `agentproc_unix_test.go:103: Wait = exec: WaitDelay expired before I/O complete, want nil: the agent exits of itself` | pass |
+| `TestTapKeepsCloseEnding` | A | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | a grandchild holds stderr 1.2 s past the exit | `agentproc_unix_test.go:135: Wait = exec: WaitDelay expired before I/O complete, want nil: the agent exits of itself` | pass |
+| `TestCloseContextBoundsHandlers/in_process,_CloseContext` | A | 300 ms, bound 300 ms | 3 s, bound 3 s, `within` 9 s | exit seen 350 ms late | `closecontext_test.go:150: CloseContext = context deadline exceeded` | pass |
+| `TestCloseContextBoundsHandlers/in_process,_KillContext` | W1 | 300 ms, bound 300 ms | 3 s, bound 3 s, `within` 9 s | exit seen 350 ms late | `closecontext_test.go:150: KillContext = context deadline exceeded` | pass |
+| `TestCloseContextBoundsHandlers/a_child,_CloseContext` | A | 300 ms, bound 300 ms, `Wait` 3 s | 3 s, bound 3 s, `Wait` 35 s | exit seen 350 ms late | `closecontext_test.go:150: CloseContext = context deadline exceeded` | pass |
+| `TestCloseContextBoundsHandlers/a_child,_KillContext` | A | 300 ms, bound 300 ms, `Wait` 3 s | 3 s, bound 3 s, `Wait` 35 s | exit seen 350 ms late | `closecontext_test.go:150: KillContext = context deadline exceeded` | pass |
+| `TestCloseContextJoinsTheAgentsError` | A | 300 ms, ctx 300 ms | 3 s, ctx 3 s, `within` 9 s | exit seen 350 ms late | `closecontext_test.go:185: CloseContext = context deadline exceeded` | pass |
+| `TestCloseContextWaitsForHandlers` | A | 300 ms, release at 150 ms | 3 s, release at 1.5 s | exit seen 350 ms late | `closecontext_test.go:201: CloseContext = agentproc: agent terminated after 352.288042ms, want Wait's, nil` | pass |
+| `TestCloseContextCause` | W1 | 300 ms, ctx 300 ms | 3 s, ctx 3 s, `within` 9 s | exit seen 350 ms late | `closecontext_test.go:250: CloseContext = the test's bound` | pass |
+| `TestCloseContextNotHandlers` | W1 | 2 s, `within` 5 s | 3 s, `within` 6 s | a grandchild holds stderr 1.2 s past the exit | `closecontext_test.go:287: CloseContext = context deadline exceeded` | pass |
+| `TestInProcessTerminate` | B | 300 ms; floor 300 ms | 3 s; floor 3 s, `within` 9 s | exit seen 350 ms late | `inprocess_test.go:116: Close = agentproc: agent killed: serve's own error, want ErrTerminated joined to Serve's error` | pass |
+| `TestInProcessKill` | B | 300 ms, `within` 3.9 s | 3 s, `within` 12 s | exit seen 350 ms late | `inprocess_test.go:134: Close = agentproc: agent killed: agentproc: in-process agent abandoned, want ErrKilled joined to Serve's io.ErrClosedPipe, and ` | pass |
+| `TestWaitErrorSaysTheCauseOnce/Kill,_Serve_returning_its_cause` | W1 | 300 ms, `within` 3.9 s | 3 s, `within` 12 s | exit seen 350 ms late | `inprocess_test.go:236: Wait's error = agentproc: agent killed: agentproc: in-process agent abandoned, want "agentproc: agent killed", and errors.Is ag` | pass |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_returning_its_cause` | B | 300 ms, `within` 3.9 s | 3 s, `within` 12 s | exit seen 350 ms late | `inprocess_test.go:236: Wait's error = agentproc: agent killed: agentproc: agent terminated, want "agentproc: agent terminated", and errors.Is agentpro` | pass |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_wrapping_its_cause` | B | 300 ms, `within` 3.9 s | 3 s, `within` 12 s | exit seen 350 ms late | `inprocess_test.go:236: Wait's error = agentproc: agent killed: serve: agentproc: agent terminated, want "serve: agentproc: agent terminated", and erro` | pass |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_returning_its_own_error` | B | 300 ms, `within` 3.9 s | 3 s, `within` 12 s | exit seen 350 ms late | `inprocess_test.go:236: Wait's error = agentproc: agent killed: serve's own error, want "agentproc: agent terminated: serve's own error", and errors.Is` | pass |
+| `TestInProcessReturnsFirst/connection_first` | A | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | exit seen 350 ms late | `inprocess_test.go:275: Wait = agentproc: agent terminated, want nil` | pass |
+| `TestKillAfterExit` | A | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | a grandchild holds stderr 1.2 s past the exit | `kill_test.go:65: Kill = exec: WaitDelay expired before I/O complete, want nil, the agent's exit of status 0` | pass |
+| `TestLineTapAsOutputTap` | A | 300 ms | 3 s | exit seen 350 ms late | `linetap_test.go:153: Close = agentproc: agent terminated` | pass |
+| `TestStderrTailOfFailedAgent` | A | 300 ms | 3 s | the standard-error copy slowed 800 ms a `Write`, lines 2 ms apart | `stderr_test.go:93: StderrTail = "line 1\n", want "line 98\nline 99\nline 100\n"` | pass |
+| `TestStderrTailNotJoined` | A | 300 ms | 3 s | the standard-error copy slowed 800 ms a `Write`, lines 2 ms apart | `stderr_test.go:117: StderrTail = "line 1\n", want the stream's last 64 bytes or fewer, from a line` | pass |
+| `TestTapErrorIgnored` | A, W2 | grace 300 ms, `Wait` 3 s | grace 3 s, `Wait` 39 s | exit seen 350 ms late | `tap_test.go:257: Wait = agentproc: agent terminated, want nil` | pass |
+| `TestBlockedTapDetached` | A | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | exit seen 350 ms late | `tap_test.go:312: Close = agentproc: agent terminated` | pass |
+| `TestTapDrainBoundedByGrace` | A | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | exit seen 350 ms late | `tap_test.go:425: Close = agentproc: agent terminated` | pass |
+| `TestDescendantsEnded/the_agent_exits_at_its_input's_end` | A | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | exit seen 350 ms late | `ties_test.go:56: Close = agentproc: agent terminated, want nil` | pass |
+| `TestDescendantsEnded/the_agent_exits_of_itself` | A | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | a grandchild holds stderr 1.2 s past the exit | `ties_test.go:84: Wait = exec: WaitDelay expired before I/O complete, want nil` | pass |
+| `TestExitedFirst/the_agent_exits_first` | A | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | a grandchild holds stderr 1.2 s past the exit | `ties_test.go:130: run 0: Wait = exec: WaitDelay expired before I/O complete, want nil` | pass |
+| `TestExitedFirst/the_connection_ends_first` | A | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | exit seen 350 ms late | `ties_test.go:134: run 0: Wait = agentproc: agent terminated, want nil` | pass |
+| `TestCallersCommandKept` | A | 300 ms | 3 s | exit seen 350 ms late | `ties_test.go:149: Close = agentproc: agent terminated` | pass |
+| `TestConnectionEndStopsAgent/a_notification_overflow` | A | 300 ms, 3.3 s | 3 s, 6 s | exit seen 350 ms late | `ties_test.go:223: Wait = agentproc: agent terminated, want nil: the flood agent exits at its input's end` | pass |
+| `TestTranscriptOfSession` | A | 300 ms | 3 s | exit seen 350 ms late | `transcript_test.go:156: Close = agentproc: agent terminated` | pass |
+| `TestProcessWaitContext/ctx_ends_first` | A | 300 ms | 3 s | exit seen 350 ms late | `waitcontext_test.go:38: Close = agentproc: agent terminated` | pass |
+| `TestProcessWaitContext/the_agent_ends_first` | A | 300 ms | 3 s | a grandchild holds stderr 1.2 s past the exit | `waitcontext_test.go:50: WaitContext = exec: WaitDelay expired before I/O complete, want Wait's, nil: the agent exits 0 of itself` | pass |
+| `TestProcessWaitContext/one_goroutine` | A | 300 ms | 3 s | exit seen 350 ms late | `waitcontext_test.go:71: Close = agentproc: agent terminated` | pass |
+| `TestDefaultPdeathsig` | A | 300 ms | 3 s | exit seen 350 ms late | `pdeathsig_test.go:34: Close = agentproc: agent terminated` | pass |
+| `TestCallersPdeathsigKept` | A | 300 ms | 3 s | exit seen 350 ms late | `pdeathsig_test.go:48: Close = agentproc: agent terminated` | pass |
+| `TestOutputTapVerbatim` | W2 | `tappedFrames`' grace 3 s | 28 s | the output tap's last `Write` held to 4 s after the drain's start | `tap_test.go:229: the output tap received 2097152 bytes, want the agent's 2097208, equal` | pass |
+| `TestInputTapSeesWrites` | W2 | `tappedFrames`' grace 3 s | 28 s | exit seen 3.5 s late | `tap_test.go:231: Close = agentproc: agent terminated` | pass at 350 ms and 3.5 s late |
+| `TestCloseReadsTheAgentsLastOutput` | W2 | grace 5 s, `within` 8 s | grace 42 s, `within` 45 s | the agent's exit held to 6 s after its go | `tap_test.go:409: Close = agentproc: agent terminated: signal: terminated, want nil: the agent exits of itself` | pass |
+| `TestBreakawayLeavesJob/Close` | A (Windows) | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | exit seen 350 ms late, on the Windows laptop | `breakaway_windows_test.go:49: stop = agentproc: agent killed, want nil` | pass |
+| `TestDescendantInJobDespiteSlowAttach` | A (Windows) | 300 ms, `within` 3.3 s | 3 s, `within` 6 s | the same | `suspended_windows_test.go:31: Close = agentproc: agent killed, want nil` | pass |
+| `TestCallersCreationFlagsKept` | A (Windows) | 300 ms | 3 s | the same | `suspended_windows_test.go:81: Close = agentproc: agent killed, want nil: the agent runs, and exits at its input's end` | pass |
+
+The plants (scratch only, each a no-op unset; the HEAD and the amended trees carry the same ones):
+
+* **The client-side plant** (`PLANT_SEEN_LATE`): `childAgent.wait` sleeps after `Cmd.Wait`, and, for an `InProcess` test, the agent's
+  `returned` is closed after the same sleep following `Serve`'s return, so the exit is seen that much late. It is a sleep, a
+  stand-in for a starved watcher, not a starved one.
+* **A standard-error copy that outlives `WaitDelay`** (`PLANT_LINGER`), for the twelve whose outcome has `WaitDelay` and no first
+  step: every child, at its exit, leaves a grandchild in a process group of its own that holds the child's standard error 1.2 s
+  (at `HEAD` `WaitDelay` is 150 ms, 1 s for `TestCloseContextNotHandlers`; amended 1.5 s), so `Cmd.Wait` returns `exec.ErrWaitDelay`
+  for real. This one is real, not a sleep in the product.
+* **A slow standard-error copy** for the two stderr-tail tests, which assert lines and a status that a `WaitDelay` that expires
+  after the last read cannot lose: the tail's `Write` takes 800 ms and the child writes its 100 lines 2 ms apart, so the copy is
+  behind when the child exits and the lines are lost at `HEAD`'s `WaitDelay` and kept at the amended 1.5 s. Real.
+* W2's own plants, in "The margins and the breaks", below.
+
+`TestDefaultPdeathsig` and `TestCallersPdeathsigKept` build for Linux and FreeBSD only: their plants ran on the Linux host
+(chunks `pd-head` and `pd-amend`), the three Windows-only ones on the Windows laptop (below), the rest on this Mac, unraced, one test a run (`plants.py`, 672 runs).
+
+**The three Windows-only tests, moved** (this replaces the first report's "did not move", which rested on no Windows host being in
+the brief; the coordinator's correction). Read: each test and the audit's row. Each needs `Close` nil, the agent's exit at its input's end
+seen within the first step (M1): `TestBreakawayLeavesJob/Close` (`breakaway_windows_test.go:79`, whose `ok` is `err == nil`, the
+shared `breakaway` helper's `Kill` subtest keeping `testGrace`), `TestDescendantInJobDespiteSlowAttach` (`suspended_windows_test.go:31`,
+after a 200 ms attach delay) and `TestCallersCreationFlagsKept` (`:81`). The client-side plant fits all three and uses nothing
+Unix-specific, so no Windows form of the lingering-grandchild plant was needed; their outcomes do not wait on `WaitDelay` (the
+shared `ready` write is long before the exit). On the Windows laptop, a scratch copy of each tree (the planted `HEAD`, and the
+planted amended tree, without the Unix-only linger plant), `go test -c -race`, each test by name, one run each, `-test.shuffle=off`,
+the host keeping each run's output and exit status in its own files (chunks `win-head`, `win-amend`, below):
+
+| Test | no plant | 350 ms late | 2.5 s late | 3.5 s late | first step waits 0 s |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `TestBreakawayLeavesJob/Close`, `HEAD` | pass | fail, `stop = agentproc: agent killed, want nil` | fail, the same | fail, `stop took longer than 3.3s` | fail, `agent killed: exit status 1` |
+| `TestBreakawayLeavesJob/Close`, amended | pass | pass | pass | fail, `stop = agentproc: agent killed, want nil` | fail, `agent killed: exit status 1` |
+| `TestDescendantInJobDespiteSlowAttach`, `HEAD` | pass | fail, `Close = agentproc: agent killed, want nil` | fail, the same | fail, `Close took longer than 3.3s` | fail, `agent killed: exit status 1` |
+| `TestDescendantInJobDespiteSlowAttach`, amended | pass | pass | pass | fail, `Close = agentproc: agent killed, want nil` | fail, `agent killed: exit status 1` |
+| `TestCallersCreationFlagsKept`, `HEAD` | pass | fail, `Close = agentproc: agent killed, want nil` | fail, the same | fail, the same | fail, `agent killed: exit status 1` |
+| `TestCallersCreationFlagsKept`, amended | pass | pass | pass | fail, `Close = agentproc: agent killed, want nil` | fail, `agent killed: exit status 1` |
+
+Each fails at `HEAD` under the 350 ms plant and passes amended (and at 2.5 s); a past-the-grace plant (3.5 s) and the break fail the
+amended test. All three moved to `exitGrace`. `go vet ./agentproc/` on the Windows laptop, exit 0; `GOOS=windows go vet` here, exit 0.
+Not verified: that a loaded Windows runner meets the new grace; the Windows laptop ran each test once, idle.
+
+#### The margins and the breaks
+
+* **`TestDescendantsEnded`'s subtest** (the exit at the input's end, margin of `exitGrace`, 3 s): the exit seen 2.5 s late passes
+  (3.9 s), 3.5 s late fails (`ties_test.go:63: Close = agentproc: agent terminated, want nil`); 350 ms late passes; no plant passes
+  (all four, this Mac, `margin.json`).
+* **The break "the first step waits 0 s"** (`BREAK_NO_FIRST_WAIT`), amended, fails every class A test whose outcome waits the first
+  step: `TestCloseLadder/exits_at_its_input's_end`, `TestDescendantsEnded/the_agent_exits_at_its_input's_end`,
+  `TestCloseContextBoundsHandlers/in_process,_CloseContext` and `a_child,_CloseContext`, `TestCloseContextJoinsTheAgentsError`,
+  `TestCloseContextWaitsForHandlers`, `TestInProcessReturnsFirst/connection_first`, `TestLineTapAsOutputTap`,
+  `TestDefaultPdeathsig`, `TestCallersPdeathsigKept` (Linux), `TestCallersCommandKept`,
+  `TestConnectionEndStopsAgent/a_notification_overflow`, `TestTranscriptOfSession`, `TestExitedFirst/the_connection_ends_first`,
+  `TestProcessWaitContext/ctx_ends_first` and `/one_goroutine`, `TestBlockedTapDetached`, `TestTapDrainBoundedByGrace` and the three Windows-only tests (on the Windows laptop, above); the
+  class B tests with a floor fail it too (`TestCloseLadder/exits_on_SIGTERM`, `TestInProcessTerminate`). The tests whose outcome
+  does not wait the first step (the twelve, the kills, `TestInProcessKill`, the step-2 subtests' text, `TestCloseContextCause`, W1's
+  others) pass it, as they should: the break is not their defect. Their defect is caught by the past-the-grace plants: each
+  fitting plant at 3.5 s late (`PLANT_SEEN_LATE`), or 2 s of lingering, or 2 s of slow copy, fails the amended test in every row of
+  the table but W2's three, whose past-the-bound plants are the margins below (`matrix1.json`, `drip.json`).
+* **The five bounds**, amended files, on the Linux host under `-race`, idle, `-test.shuffle=off` (chunk `w2-amend`; each case three
+  runs, each break ten, `TestCloseContextBoundsHandlers`' break two):
+
+  | Bound | 0.8 passes | 1.2 fails | The break fails it |
+  | :--- | :--- | :--- | :--- |
+  | `TestNoLostOutput`, 35 s | 28 s: 3 of 3 | 42 s: 3 of 3, `Wait took longer than 35s` | the connection closed at the agent's exit: 10 of 10, "the client received N of the 1000 session updates the agent wrote" (N 435 to 475) |
+  | `TestTapErrorIgnored`, 39 s | 31.2 s: 3 of 3 | 46.8 s: 3 of 3, `Wait took longer than 39s` | a tap's `Write` error returned to the reader: 10 of 10, `Wait = agentproc: agent terminated: signal: terminated, want nil` |
+  | `TestOutputTapVerbatim`, 28 s | 22.4 s after the drain's start: 3 of 3 | 33.6 s: 3 of 3, "the output tap received 2097152 bytes, want the agent's 2097208, equal" | a tap that skips a queued write: 10 of 10, "received 2031672 bytes" |
+  | `TestCloseReadsTheAgentsLastOutput`, 42 s | 33.6 s after the go: 3 of 3 | 50.4 s: 3 of 3, "agent terminated: signal: terminated, want nil: the agent exits of itself" | `stop` closing the connection at once: 10 of 10, "Close = signal: broken pipe, want nil" |
+  | `closecontext_test.go:156`, 35 s | 28 s after the release: 3 of 3 | 42 s: 3 of 3, `Wait took longer than 35s` | `Wait` hanging after its handlers returned: 2 of 2, "Wait took longer than 35s" (every subtest, both runs) |
+
+  The same plants at `HEAD`'s own bounds (chunk `w2-head`, two runs each, a plant ending at 5 s, 5 s, 4 s, 6 s and 4 s) fail all five
+  at `HEAD` (each with its own test's message, `w2-head`'s output) and pass amended (chunk `w2-amend`, cases `*-same`, two runs each). The no-plant runs pass
+  (3 of 3 each). The break's message at `TestTapErrorIgnored` is the agent's 3 s grace's, as in phase 1b (the defect ends the
+  connection; a bound does not touch it). The plant that breaks the taps fires only once `Wait`'s bound has begun, so the break's
+  failure is at the bound's assertion and not at `Initialize`.
+
+#### The A/B under the in-process load
+
+`HEAD` (plus `zz_load_test.go` only) and the amended tree (plus the same file), the whole package, `go test -c -race`, run on the
+Linux host as `GOMAXPROCS=2 BURN=32 agentproc.test -test.shuffle=<seed> -test.v`, the load started by the binary's `init`, never in a
+child, so it covers every test; 10 rounds each, seeds 1795000001 to 1795000010, the same seed for both. Each chunk two rounds, through
+`run-on-host --need linux --race`, one at a time on the host, never a WSL distro; the host kept each round's output, seed and exit
+status in its own files. Every round of both exited 1 (F7's tests and the one below, as in phase 1's rounds). Failing tests by
+round count, `HEAD` and amended:
+
+| Test | `HEAD`, of 10 | Amended, of 10 |
+| :--- | ---: | ---: |
+| `TestNoLostOutput` | 10 | 0 |
+| `TestTapErrorIgnored` | 10 | 0 |
+| `TestCloseReadsTheAgentsLastOutput` | 10 | 0 |
+| `TestOutputTapVerbatim` | 4 | 0 |
+| `TestCloseLadder/exits_at_its_input's_end` | 10 | 0 |
+| `TestCloseLadder/exits_on_SIGTERM` | 10 | 0 |
+| `TestExitedFirst/the_agent_exits_first` | 10 | 0 |
+| `TestExitedFirst/the_connection_ends_first` | 10 | 0 |
+| `TestCloseContextBoundsHandlers/a_child,_CloseContext` | 10 | 0 |
+| `TestCloseContextBoundsHandlers/a_child,_KillContext` | 9 | 0 |
+| `TestProcessWaitContext/one_goroutine` | 8 | 0 |
+| `TestCallersCommandKept` | 7 | 0 |
+| `TestCallersPdeathsigKept` | 7 | 0 |
+| `TestLineTapAsOutputTap` | 7 | 0 |
+| `TestDefaultPdeathsig` | 6 | 0 |
+| `TestProcessWaitContext/ctx_ends_first` | 6 | 0 |
+| `TestDescendantsEnded/the_agent_exits_at_its_input's_end` | 4 | 0 |
+| `TestDescendantsEnded/the_agent_exits_of_itself` | 3 | 0 |
+| `TestInProcessKill` | 2 | 0 |
+| `TestProcessWaitContext/the_agent_ends_first` | 2 | 0 |
+| `TestConnectionEndStopsAgent/a_notification_overflow`, `TestEscapedDescendantDoesNotHoldWait`, `TestTapKeepsCloseEnding`, `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_returning_its_cause` | 1 each | 0 |
+| `TestBlockedTapDetached` (readiness only, counted apart) | 10 | 10 |
+| `TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix` (F7, counted apart) | 10 each | 10 each |
+| `TestTapDrainBoundedByGrace` (readiness only, counted apart) | 10 | 10 |
+
+`HEAD` failed every test phase 1 and phase 1b saw fail. **Judged by the owner's ruling "Count it apart with the other readiness
+failure" (above): amended, 0 of 10 for every moved test's own outcome.** `TestTapDrainBoundedByGrace` failed in 10 of 10 amended
+rounds, and each of the ten is the readiness message and nothing else: in each of rounds 1 to 10 (seeds 1795000001 to 1795000010) the
+host's output holds exactly one `--- FAIL: TestTapDrainBoundedByGrace` and, for it, exactly one line, `tap_test.go:441: the bulk
+agent did not say it was ready within 30s` (the test taking 31 to 38 s), and over all ten amended rounds the only failure messages in
+the output are four: that one, `tap_test.go:317` and `tap_test.go:358` (the same message, `TestBlockedTapDetached` and
+`TestDetachedTapIsPrefix`) and `inprocess_test.go:468` (`TestInProcessDetachedTapIsPrefix`), ten each. `TestBlockedTapDetached`'s ten
+are the readiness message too. Counted apart: `TestTapDrainBoundedByGrace`'s and `TestBlockedTapDetached`'s readiness, F7's two. No
+other test failed in any amended round, and no round shows another message for either test; the same ten at `HEAD`.
+
+#### The gate
+
+`make pre-add-check FILES="<the changed test files>"` on this Mac through `run-heavy --`, after the last change to any test file.
+The first run, over the twelve files, started 2026-11-16T23:02:48Z and ended 23:04:43Z (116 s), exit 0; the Windows-only files
+changed afterwards, so it was re-run over all fourteen: started 2026-11-17T00:00:36Z, ended 00:02:24Z (108 s), exit status 0
+(`gate2.status`, read), output "14 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached),
+tidy, govulncheck". The fourteen files' modification times are at latest 2026-11-16T23:56:49Z (the Windows files; the other twelve
+21:32:47Z), before the second gate's start, by 3 minutes 47 seconds. `GOOS=windows go vet ./agentproc/` and `GOOS=freebsd go vet
+./agentproc/`, exit 0. Not run: phase 4's confirmation, `tools/gates.py`.
+
+#### The chunks
+
+| Chunk | What | Seconds (the queue's wait included) | Result |
+| :--- | :--- | ---: | :--- |
+| `matrix1`, `drip`, `margin` | the plants, this Mac, 672 runs | about 1500 | as the table |
+| `w2-amend`, `w2-head` | the margins and breaks, the Linux host, `-race`, idle | 1058, 621 | as above |
+| `pd-head`, `pd-amend` | the two Linux-only tests under the plants | 1472, 1374 | each plant as the table |
+| `ab-head-01` to `-05` | `HEAD` under the load, rounds 1 to 10 | 618, 640, 1075, 1461, 1365 | as above |
+| `ab-amend-01` to `-05` | amended under the load, rounds 1 to 10 | 1254, 1350, 1485, 1027, 726 | as above |
+| `win-head`, `win-amend`, `win-vet` | the three Windows-only tests under the plant, the Windows laptop, `-race`; `go vet` | 52, 59, 8 | each as the table above, exit 0 |
+| the gate, twice | `make pre-add-check`, this Mac, twelve files then fourteen | 116, 108 | exit 0, exit 0 |
+
+One chunk was cancelled before it ran (`w2-01`, replaced by `w2-amend` and `w2-head` once the HEAD-side plants were built).
+
+#### Deviations
+
+1. **`TestTapDrainBoundedByGrace`'s readiness wait** failed in 10 of 10 amended rounds, as at `HEAD`. Resolved by the owner's ruling,
+   relayed by the coordinator, "Count it apart with the other readiness failure" (the entry above): its grace move stays, its 30 s
+   readiness failure is counted apart with `TestBlockedTapDetached`'s and is phase 5's report's. Evidence in "The A/B", restated.
+2. **The three Windows-only tests** were first left unmoved for want of a Windows host. Resolved: they were planted on the Windows
+   laptop and moved ("The three Windows-only tests, moved").
+
+#### Docs cross-check (phase 3 owns the fixes)
+
+`docs/architecture.md:1253` names tests "under a grace of `slack`" and, at `:1240`-`:1256`, lists the `agentproc` tests; it does not
+say which run under `exitGrace` or name the five bounds: open, phase 3. `docs/decisions/0027-PLAN-agent-process-helper.md:206`,
+"The grace in tests is 300 ms": open, phase 3, its annotation. `CHANGELOG.md`'s `Unreleased` has no line: open, phase 3. The test
+files' own comments that stated a grace (`tappedFrames`', `startInProcess`'s "under testGrace unless its Grace is set", which is still
+true) were fixed in this change. Searched `docs/architecture.md`, `README.md`, `AGENTS.md`, `tools/README.md`, `CHANGELOG.md`,
+`docs/guides`, `agentproc/*.go` and every `*.md` and `*.py` of the tree for `testGrace`, `slack`, `300 ms` and `3 s`;
+`tools/consumer.py:33`'s "300 ms bound" is the consumer program's own and not these tests'.
+
+#### Not verified
+
+* The plants are partly sleeps: the client-side plant delays what `Close` sees by a sleep and is not a starved process; the W2
+  plants delay one wait each. Whether a loaded runner's real exits reach the new graces' edges was shown only by the load runs.
+* The plants ran on this Mac unraced and on the Linux host raced, one test a run, `-test.shuffle=off`; idle, not under load.
+* The 10-round A/B is a sample; the figures rest on phase 1b's measurement from one 4-CPU Linux host.
+* FreeBSD: vet only. Windows: the three moved tests ran once each on the laptop, idle, under `-race`; the rest of the package was
+  not run there in this phase.
+* `TestInputTapSeesWrites`' only plant is the late exit (350 ms and 3.5 s); a plant on its input tap's drain was not found,
+  since a late drain does not fail it.
+* The breaks were chosen by phase 1b to fit W2's descriptions and were not proved to be the defects.
+
+#### Files, checks and staging
+
+Changed: `agentproc/agentproc_test.go`, `agentproc_unix_test.go`, `breakaway_windows_test.go`, `suspended_windows_test.go`, `closecontext_test.go`, `inprocess_test.go`, `kill_test.go`,
+`linetap_test.go`, `pdeathsig_test.go`, `stderr_test.go`, `tap_test.go`, `ties_test.go`, `transcript_test.go`,
+`waitcontext_test.go`; this PLAN, the MADR (the ruling) and `docs/README.md`. Not changed: any source file, workflow, script or
+tool. Scratch only, not staged: the plant and tree builders, `plants.py`, the chunk scripts, the tables and every chunk's output.
+Staged, not committed, not pushed.

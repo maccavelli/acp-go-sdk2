@@ -46,24 +46,25 @@ func TestBreakawayLeavesJob(t *testing.T) {
 	t.Parallel()
 	t.Run("Close", func(t *testing.T) {
 		t.Parallel()
-		breakaway(t, (*Process).Close, func(err error) bool { return err == nil }, "nil")
+		breakaway(t, (*Process).Close, func(err error) bool { return err == nil }, "nil", exitGrace)
 	})
 	t.Run("Kill", func(t *testing.T) {
 		t.Parallel()
-		breakaway(t, (*Process).Kill, func(err error) bool { return errors.Is(err, ErrKilled) }, "ErrKilled")
+		breakaway(t, (*Process).Kill, func(err error) bool { return errors.Is(err, ErrKilled) }, "ErrKilled", testGrace)
 	})
 }
 
-// breakaway runs TestBreakawayLeavesJob's agent and stops it with stop, whose
-// error must be as ok says.
-func breakaway(t *testing.T, stop func(*Process) error, ok func(error) bool, want string) {
+// breakaway runs TestBreakawayLeavesJob's agent under grace and stops it with
+// stop, whose error must be as ok says. Close, which needs the agent's exit
+// seen within its first step, runs under exitGrace; Kill waits no step.
+func breakaway(t *testing.T, stop func(*Process) error, ok func(error) bool, want string, grace time.Duration) {
 	t.Helper()
 	beat := filepath.Join(t.TempDir(), "beat")
 	cmd := agentCmd("parent-breakaway")
 	cmd.Env = append(cmd.Env, beatEnv+"="+beat)
 	w := &stderrText{ready: make(chan struct{})}
 	cmd.Stderr = w
-	p, err := (&Command{Cmd: cmd, Grace: testGrace}).Start(&testClient{})
+	p, err := (&Command{Cmd: cmd, Grace: grace}).Start(&testClient{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +77,7 @@ func breakaway(t *testing.T, stop func(*Process) error, ok func(error) bool, wan
 	case <-time.After(readyWait):
 		t.Fatalf("the parent-breakaway agent did not say it was ready within %v", readyWait)
 	}
-	if _, err := within(t, testGrace+slack, "stop", func() error { return stop(p) }); !ok(err) {
+	if _, err := within(t, grace+slack, "stop", func() error { return stop(p) }); !ok(err) {
 		t.Errorf("stop = %v, want %s", err, want)
 	}
 	if !beating(beat + ".away") {

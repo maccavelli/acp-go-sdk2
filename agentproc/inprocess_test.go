@@ -102,34 +102,36 @@ func TestInProcessEndsAtInputEnd(t *testing.T) {
 }
 
 // TestInProcessTerminate requires a Serve that ignores its input's end to be
-// stopped by the second step, its context cancelled with ErrTerminated.
+// stopped by the second step, its context cancelled with ErrTerminated. It
+// runs under exitGrace: it needs Serve's return seen within the second step.
 func TestInProcessTerminate(t *testing.T) {
 	t.Parallel()
 	cause := make(chan error, 1)
-	p := startInProcess(t, &InProcess{Serve: func(ctx context.Context, _ io.Reader, _ io.Writer) error {
+	p := startInProcess(t, &InProcess{Grace: exitGrace, Serve: func(ctx context.Context, _ io.Reader, _ io.Writer) error {
 		<-ctx.Done()
 		cause <- context.Cause(ctx)
 		return errServe
 	}})
-	d, err := within(t, 2*testGrace+slack, "Close", p.Close)
+	d, err := within(t, 2*exitGrace+slack, "Close", p.Close)
 	if !errors.Is(err, ErrTerminated) || !errors.Is(err, errServe) || errors.Is(err, ErrKilled) {
 		t.Errorf("Close = %v, want ErrTerminated joined to Serve's error", err)
 	}
 	if got := <-cause; !errors.Is(got, ErrTerminated) {
 		t.Errorf("Serve's context's cause = %v, want ErrTerminated", got)
 	}
-	if d < testGrace {
-		t.Errorf("Close took %v: the first step waits the grace, %v", d, testGrace)
+	if d < exitGrace {
+		t.Errorf("Close took %v: the first step waits the grace, %v", d, exitGrace)
 	}
 }
 
 // TestInProcessKill requires a Serve that ignores its input's end and its
 // context, and returns only when a read fails, to be stopped by the third
-// step, which closes its pipes, and not abandoned.
+// step, which closes its pipes, and not abandoned. It runs under exitGrace: it
+// needs Serve's return after the kill seen within the abandonment's wait.
 func TestInProcessKill(t *testing.T) {
 	t.Parallel()
-	p := startInProcess(t, &InProcess{Serve: readUntilFailure})
-	_, err := within(t, 3*testGrace+slack, "Close", p.Close)
+	p := startInProcess(t, &InProcess{Grace: exitGrace, Serve: readUntilFailure})
+	_, err := within(t, 3*exitGrace+slack, "Close", p.Close)
 	if !errors.Is(err, ErrKilled) || !errors.Is(err, io.ErrClosedPipe) || errors.Is(err, ErrAbandoned) {
 		t.Errorf("Close = %v, want ErrKilled joined to Serve's io.ErrClosedPipe, and not ErrAbandoned", err)
 	}
@@ -202,36 +204,41 @@ func TestWaitErrorSaysTheCauseOnce(t *testing.T) {
 	release := make(chan struct{})
 	free := sync.OnceFunc(func() { close(release) })
 	t.Cleanup(free)
+	// Each case runs under the grace its wait needs: the cases that need
+	// Serve's return seen within the abandonment's wait or the second step
+	// run under exitGrace, and the abandonment, which waits three graces out,
+	// under testGrace.
 	for _, tc := range []struct {
 		name  string
 		serve func(context.Context, io.Reader, io.Writer) error
 		kill  bool
 		want  string
 		is    error
+		grace time.Duration
 	}{
-		{"Kill, Serve returning its cause", causeServe, true, "agentproc: agent killed", ErrKilled},
-		{"step 2, Serve returning its cause", causeServe, false, "agentproc: agent terminated", ErrTerminated},
+		{"Kill, Serve returning its cause", causeServe, true, "agentproc: agent killed", ErrKilled, exitGrace},
+		{"step 2, Serve returning its cause", causeServe, false, "agentproc: agent terminated", ErrTerminated, exitGrace},
 		{"step 2, Serve wrapping its cause", func(ctx context.Context, _ io.Reader, _ io.Writer) error {
 			<-ctx.Done()
 			return fmt.Errorf("serve: %w", context.Cause(ctx))
-		}, false, "serve: agentproc: agent terminated", ErrTerminated},
+		}, false, "serve: agentproc: agent terminated", ErrTerminated, exitGrace},
 		{"step 2, Serve returning its own error", func(ctx context.Context, _ io.Reader, _ io.Writer) error {
 			<-ctx.Done()
 			return errServe
-		}, false, "agentproc: agent terminated: serve's own error", ErrTerminated},
+		}, false, "agentproc: agent terminated: serve's own error", ErrTerminated, exitGrace},
 		{"abandoned", func(context.Context, io.Reader, io.Writer) error {
 			<-release
 			return nil
-		}, false, "agentproc: agent killed: agentproc: in-process agent abandoned", ErrAbandoned},
+		}, false, "agentproc: agent killed: agentproc: in-process agent abandoned", ErrAbandoned, testGrace},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			p := startInProcess(t, &InProcess{Serve: tc.serve})
+			p := startInProcess(t, &InProcess{Grace: tc.grace, Serve: tc.serve})
 			stop := p.Close
 			if tc.kill {
 				stop = p.Kill
 			}
-			_, err := within(t, 3*testGrace+slack, "the stop", stop)
+			_, err := within(t, 3*tc.grace+slack, "the stop", stop)
 			if err == nil || err.Error() != tc.want || !errors.Is(err, tc.is) {
 				t.Errorf("Wait's error = %v, want %q, and errors.Is %v", err, tc.want, tc.is)
 			}
@@ -264,14 +271,14 @@ func TestInProcessReturnsFirst(t *testing.T) {
 	})
 	t.Run("connection first", func(t *testing.T) {
 		t.Parallel()
-		p := startInProcess(t, &InProcess{Serve: func(_ context.Context, in io.Reader, _ io.Writer) error {
+		p := startInProcess(t, &InProcess{Grace: exitGrace, Serve: func(_ context.Context, in io.Reader, _ io.Writer) error {
 			_, err := io.Copy(io.Discard, in)
 			return err
 		}})
 		if err := p.Conn().Close(); err != nil {
 			t.Fatalf("closing the connection: %v", err)
 		}
-		if _, err := within(t, testGrace+slack, "Wait", p.Wait); err != nil {
+		if _, err := within(t, exitGrace+slack, "Wait", p.Wait); err != nil {
 			t.Errorf("Wait = %v, want nil", err)
 		}
 		if p.ExitedFirst() {

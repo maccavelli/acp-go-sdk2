@@ -22,7 +22,7 @@ func TestProcessWaitContext(t *testing.T) {
 	t.Parallel()
 	t.Run("ctx ends first", func(t *testing.T) {
 		t.Parallel()
-		p := start(t, "eof", &testClient{})
+		p := startCmdGrace(t, agentCmd("eof"), "eof", &testClient{}, exitGrace)
 		why := errors.New("the test's bound")
 		ctx, cancel := context.WithCancelCause(context.Background())
 		cancel(why)
@@ -45,7 +45,7 @@ func TestProcessWaitContext(t *testing.T) {
 		t.Parallel()
 		cmd := agentCmd("parent-exit")
 		cmd.Env = append(cmd.Env, beatEnv+"="+filepath.Join(t.TempDir(), "beat"))
-		p := startCmd(t, cmd, "parent-exit", &testClient{})
+		p := startCmdGrace(t, cmd, "parent-exit", &testClient{}, exitGrace)
 		if err := p.WaitContext(t.Context()); err != nil {
 			t.Errorf("WaitContext = %v, want Wait's, nil: the agent exits 0 of itself", err)
 		}
@@ -55,7 +55,7 @@ func TestProcessWaitContext(t *testing.T) {
 	})
 	t.Run("one goroutine", func(t *testing.T) {
 		t.Parallel()
-		p := start(t, "eof", &testClient{})
+		p := startCmdGrace(t, agentCmd("eof"), "eof", &testClient{}, exitGrace)
 		const label = "TestProcessWaitContext/one goroutine"
 		pprof.Do(context.Background(), pprof.Labels("test", label), func(context.Context) {
 			ended, cancel := context.WithCancel(context.Background())

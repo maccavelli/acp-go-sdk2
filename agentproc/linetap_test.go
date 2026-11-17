@@ -148,7 +148,7 @@ func TestLineTapNilFn(t *testing.T) {
 func TestLineTapAsOutputTap(t *testing.T) {
 	t.Parallel()
 	f := &frames{}
-	p := startTapped(t, "frames", nil, testGrace, LineTap(f.add), nil, acp.WithMaxMessageSize(1<<20))
+	p := startTapped(t, "frames", nil, exitGrace, LineTap(f.add), nil, acp.WithMaxMessageSize(1<<20))
 	if err := p.Close(); err != nil {
 		t.Fatalf("Close = %v", err)
 	}

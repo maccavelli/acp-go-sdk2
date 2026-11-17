@@ -26,7 +26,7 @@ func setInertDeathSignal(cmd *exec.Cmd) {
 func TestDefaultPdeathsig(t *testing.T) {
 	t.Parallel()
 	cmd := agentCmd("eof")
-	p := startCmd(t, cmd, "eof", &testClient{})
+	p := startCmdGrace(t, cmd, "eof", &testClient{}, exitGrace)
 	if got := cmd.SysProcAttr.Pdeathsig; got != syscall.SIGKILL {
 		t.Errorf("Pdeathsig = %v, want SIGKILL", got)
 	}
@@ -40,7 +40,7 @@ func TestCallersPdeathsigKept(t *testing.T) {
 	t.Parallel()
 	cmd := agentCmd("eof")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM}
-	p := startCmd(t, cmd, "eof", &testClient{})
+	p := startCmdGrace(t, cmd, "eof", &testClient{}, exitGrace)
 	if got := cmd.SysProcAttr.Pdeathsig; got != syscall.SIGTERM {
 		t.Errorf("Pdeathsig = %v, want the caller's SIGTERM", got)
 	}

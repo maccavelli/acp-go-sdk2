@@ -91,7 +91,7 @@ func requireGone(t *testing.T, pid int) {
 // (0027-MADR-agent-process-helper.md, "The agent's own end").
 func TestEscapedDescendantDoesNotHoldWait(t *testing.T) {
 	t.Parallel()
-	p, beat := startBeating(t, "parent-escape")
+	p, beat := startBeatingGrace(t, "parent-escape", exitGrace)
 	t.Cleanup(func() {
 		if b, err := os.ReadFile(beat + ".pid"); err == nil {
 			if pid, err := strconv.Atoi(string(b)); err == nil {
@@ -99,7 +99,7 @@ func TestEscapedDescendantDoesNotHoldWait(t *testing.T) {
 			}
 		}
 	})
-	if _, err := within(t, testGrace+slack, "Wait", p.Wait); err != nil {
+	if _, err := within(t, exitGrace+slack, "Wait", p.Wait); err != nil {
 		t.Errorf("Wait = %v, want nil: the agent exits of itself", err)
 	}
 	select {
@@ -120,7 +120,7 @@ func TestEscapedDescendantDoesNotHoldWait(t *testing.T) {
 func TestTapKeepsCloseEnding(t *testing.T) {
 	t.Parallel()
 	beat := filepath.Join(t.TempDir(), "beat")
-	p := startTapped(t, "parent-escape", []string{beatEnv + "=" + beat}, testGrace, &capture{}, nil)
+	p := startTapped(t, "parent-escape", []string{beatEnv + "=" + beat}, exitGrace, &capture{}, nil)
 	t.Cleanup(func() {
 		if b, err := os.ReadFile(beat + ".pid"); err == nil {
 			if pid, err := strconv.Atoi(string(b)); err == nil {
@@ -131,7 +131,7 @@ func TestTapKeepsCloseEnding(t *testing.T) {
 	if !beating(beat) {
 		t.Fatal("the escaped grandchild is not running: the test proves nothing")
 	}
-	if _, err := within(t, testGrace+slack, "Wait", p.Wait); err != nil {
+	if _, err := within(t, exitGrace+slack, "Wait", p.Wait); err != nil {
 		t.Errorf("Wait = %v, want nil: the agent exits of itself", err)
 	}
 }
