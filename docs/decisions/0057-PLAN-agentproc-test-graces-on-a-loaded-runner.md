@@ -2046,3 +2046,108 @@ Changed: this PLAN (this entry). Not changed: `docs/README.md` (the rows' text i
 Scratch only: the chunk scripts, the judge and every chunk's output (`pkg.sh`, `mod.sh`, `mac.sh`, `judge.py`, `out/`).
 Checks, each after the last edit, in UTC, run with the PLAN staged: `make check-records`, exit 0; `make markdownlint`, exit 0 ("57 files", "0 issues in 0 files"); `make disclosure-check`, exit 0 ("842 tracked file(s), 0 finding(s)").
 Staged, not committed, not pushed.
+
+### 2026-11-16: phase 5 (the report)
+
+Run by a mainstream-tier model at high effort, as the phase prices it, on the coordinator's brief. `date +%F` printed 2026-11-16, the
+date of the earlier entries; the times below are UTC and fall on 2026-11-17. Base commit `b050c9f`, `main`, level with
+`origin/main`, tree clean at the start. The phase changed no source, test, workflow or tool, and no bound, grace or data size; its
+tree changes are the report, its row in `docs/README.md` and this entry.
+
+* **Approval and rulings.** The owner's ruling, relayed by the coordinator, "Run phases 1 to 4 through; then the report" (the
+  approval entry above); phases 1 to 4 are committed (`f0b7c2e`, `032320a`, `f102c5a`, `8b0b051`, `b050c9f`) and CI is green on
+  the fix. The report answers "A measured report, then decide" and "Count it apart with the other readiness failure", each the
+  owner's ruling, relayed by the coordinator. Two conditions are the coordinator's, as the coordinator's application of "A measured
+  report, then decide" and not the owner's ruling: the Windows laptop (the test alone and the whole package, where phase 4 saw
+  three tests fail in 3 of 3 rounds) and this Mac (the reference for the race gate of record).
+* **Read:** this PLAN (phase 5 with its three additions, "Where the race gates run", the audit's record for these tests, phase 1b's
+  method, phase 2's A/B and the counted-apart rulings, phase 4's record with its section on the Windows laptop); the MADR's F7 and
+  W5; `agentproc/tap_test.go`, `inprocess_test.go`, `child_test.go`, `tap.go`, `agentproc.go`, `inprocess.go` and the connection's
+  receive path in `connection.go`; `.github/workflows/ci.yml`; `AGENTS.md`, `tools/README.md`; the skills
+  `available-dev-hosts`, `madr-and-plan-writing` and `documentation-writing`; two existing reports.
+* **Ran,** every `-race` run through `run-on-host --need linux --race`, `--need windows --race` or `run-heavy` on this Mac, never a
+  WSL distro, one heavy run at a time on each host, from scratch copies of `git archive HEAD` carrying stamps and bounds the
+  environment lifts; nothing in the tree. 15 chunks on the Linux host (254 minutes, queue waits included), 22 chunks on the
+  Windows laptop (76 minutes, queue waits included), 7 chunks on this Mac (29 minutes, queue waits included); 716 runs of the four
+  tests in all (584 under `-race`). One chunk dispatched to the laptop (`W12-pkg-gmp16`) ran on this Mac when `run-on-host`'s copy
+  check failed; its records are this Mac's. The CI logs of the 14 latest CI runs on `main` were read with `gh`.
+* **The chunks** (also in the report, which says how each was measured). "Seconds" is the dispatcher's, a queue wait included.
+
+| Chunk | Host (records say) | What | `-race` | Bounds | Start (UTC) | Seconds | Exit | Records | Shuffle seeds (a round each) |
+| :--- | :--- | :--- | :---: | :---: | :--- | ---: | ---: | ---: | :--- |
+| `L01-alone-race` | Linux host | each test alone, one process a run, 10 runs of 4 tests | yes | lifted | 01:28:00 | 551 | 0 | 40 | - |
+| `M01-alone-race` | this Mac | each test alone, one process a run, 10 runs of 4 tests | yes | lifted | 01:28:00 | 341 | 0 | 40 | - |
+| `W01-alone-race` | Windows laptop | each test alone, one process a run, 10 runs of 4 tests | yes | lifted | 01:28:00 | 321 | 0 | 40 | - |
+| `W02-alone-norace` | Windows laptop | each test alone, one process a run, 10 runs of 4 tests | no | lifted | 01:33:21 | 105 | 0 | 40 | - |
+| `M02-alone-norace` | this Mac | each test alone, one process a run, 10 runs of 4 tests | no | lifted | 01:33:42 | 544 | 2 | 40 | - |
+| `W03-pkg` | Windows laptop | whole package, 4 rounds | yes | lifted | 01:35:07 | 313 | 0 | 84 | 1794884702637955,1794884778638184,1794884853638410,1794884931638645 |
+| `L02-alone-norace` | Linux host | each test alone, one process a run, 10 runs of 4 tests | no | lifted | 01:37:11 | 118 | 0 | 40 | - |
+| `L03-x` | Linux host | experiments, 5 rounds | yes | lifted | 01:39:09 | 377 | 0 | 50 | - |
+| `W04-pkg` | Windows laptop | whole package, 3 rounds | yes | lifted | 01:40:20 | 233 | 0 | 63 | 1794885014638891,1794885088639114,1794885161639334 |
+| `M03-x` | this Mac | experiments, 5 rounds | yes | lifted | 01:42:45 | 512 | 0 | 50 | - |
+| `W05-pkg` | Windows laptop | whole package, 3 rounds | yes | lifted | 01:44:14 | 147 | 0 | 48 | 1794885249639596,1794885292639726,1794885337639862 |
+| `L04-gmp` | Linux host | alone, GOMAXPROCS sweep, 5 runs, GOMAXPROCS 1,2 | yes | lifted | 01:45:27 | 318 | 0 | 20 | - |
+| `W06-x` | Windows laptop | experiments, 5 rounds | yes | lifted | 01:46:41 | 234 | 0 | 50 | - |
+| `W07-gmp` | Windows laptop | alone, GOMAXPROCS sweep, 5 runs, GOMAXPROCS 4,8 | yes | lifted | 01:50:34 | 169 | 0 | 20 | - |
+| `L05-mod` | Linux host | the module, `go test -race -shuffle=SEED ./...`, rounds 1 to 4 | yes | lifted | 01:50:45 | 382 | 0 | 72 | 1794885634640751,1794885743641079,1794885826641329,1794885914641594 |
+| `M04-pkg` | this Mac | whole package, 3 rounds | yes | lifted | 01:51:17 | 52 | 0 | 54 | 1794885662640835,1794885678640884,1794885694640933 |
+| `W08-pkg2` | Windows laptop | whole package, 5 rounds | yes | readiness lifted, 5 s graces as written | 01:53:24 | 237 | 0 | 80 | 1794885798641243,1794885841641373,1794885885641506,1794885930641642,1794885976641781 |
+| `L06-mod` | Linux host | the module, `go test -race -shuffle=SEED ./...`, rounds 5 to 8 | yes | lifted | 01:57:07 | 408 | 0 | 72 | 1794886016641901,1794886143642283,1794886242642581,1794886336642864 |
+| `W09-pkg` | Windows laptop | whole package, 4 rounds | yes | lifted | 01:57:24 | 212 | 0 | 64 | 1794886038641963,1794886089642117,1794886139642268,1794886192642428 |
+| `W10-pkg-gmp4` | Windows laptop | whole package, 3 rounds, GOMAXPROCS=4 | yes | lifted | 02:00:56 | 200 | 0 | 48 | 1794886251642602,1794886306642768,1794886370642961 |
+| `L07-mod` | Linux host | the module, `go test -race -shuffle=SEED ./...`, rounds 9 to 10 | yes | lifted | 02:03:55 | 206 | 0 | 36 | 1794886424643129,1794886536643466 |
+| `W11-pkg-gmp8` | Windows laptop | whole package, 3 rounds, GOMAXPROCS=8 | yes | lifted | 02:04:17 | 158 | 0 | 48 | 1794886451643202,1794886500643350,1794886548643495 |
+| `L20-grp` | Linux host | tests selected together, 5 runs, four | yes | lifted | 02:05:18 | 288 | 0 | 20 | - |
+| `M20-grp` | this Mac | tests selected together, 5 runs, four | yes | lifted | 02:05:18 | 94 | 0 | 20 | - |
+| `W20-grp` | Windows laptop | tests selected together, 5 runs, four | yes | lifted | 02:05:18 | 266 | 0 | 20 | - |
+| `M21-grp` | this Mac | tests selected together, 5 runs, two | yes | lifted | 02:06:52 | 47 | 0 | 10 | - |
+| `W12-pkg-gmp16` | Windows laptop, but records say darwin | whole package, 3 rounds, GOMAXPROCS=16 | yes | lifted | 02:06:54 | 94 | 0 | 54 | 1794886645643784,1794886661643833,1794886677643882 |
+| `L08-burn` | Linux host | whole package, 3 rounds, starved load | yes | lifted | 02:07:20 | 1924 | 0 | 54 | 1794887041644972,1794887616646698,1794888085648106 |
+| `W13-pkg-norace` | Windows laptop | whole package, 3 rounds | no | lifted | 02:08:28 | 124 | 0 | 48 | 1794886768644153,1794886785644205,1794886801644254 |
+| `W21-grp` | Windows laptop | tests selected together, 5 runs, two | yes | lifted | 02:09:44 | 146 | 0 | 10 | - |
+| `L21-grp` | Linux host | tests selected together, 5 runs, two | yes | lifted | 02:10:06 | 1880 | 0 | 10 | - |
+| `W30-pkg-gmp16` | Windows laptop | whole package, 3 rounds, GOMAXPROCS=16 | yes | lifted | 02:12:49 | 158 | 0 | 48 | 1794886964644741,1794887014644892,1794887062645037 |
+| `W31-pkg` | Windows laptop | whole package, 3 rounds | yes | lifted | 02:15:28 | 284 | 0 | 48 | 1794887246645587,1794887297645741,1794887348645895 |
+| `L40-serial-mod` | Linux host | the module, `go test -race -shuffle=SEED ./...`, rounds 1 to 3 | yes | lifted | 02:17:16 | 1722 | 0 | 54 | 1794888670649859,1794888773650169,1794888856650419 |
+| `W40-serial-pkg` | Windows laptop | whole package, 4 rounds | yes | lifted | 02:17:16 | 374 | 0 | 64 | 1794887399646046,1794887448646194,1794887496646339,1794887544646484 |
+| `W32-pkg-gmp16` | Windows laptop | whole package, 3 rounds, GOMAXPROCS=16 | yes | lifted | 02:20:12 | 348 | 0 | 48 | 1794887597646640,1794887645646785,1794887696646939 |
+| `L09-burn` | Linux host | whole package, 2 rounds, starved load | yes | lifted | 02:22:42 | 2431 | 0 | 36 | 1794888954650711,1794889437652161 |
+| `W33-grp-gmp16` | Windows laptop | tests selected together, 5 runs, four-gmp16 | yes | lifted | 02:26:00 | 171 | 0 | 20 | - |
+| `L50-spin` | Linux host | sustained-load probe | yes | lifted | 02:43:24 | 1325 | 0 | 15 | - |
+| `M50-spin` | this Mac | sustained-load probe | yes | lifted | 02:43:24 | 129 | 0 | 15 | - |
+| `W50-spin` | Windows laptop | sustained-load probe | yes | lifted | 02:43:24 | 138 | 0 | 15 | - |
+| `W60-pkg-asis` | Windows laptop | whole package, 3 rounds | yes | as written | 02:46:28 | 138 | 0 | 48 | 1794888983650798,1794889025650925,1794889065651046 |
+| `L42-serial-mod` | Linux host | the module, `go test -race -shuffle=SEED ./...`, rounds 4 to 7 | yes | lifted | 02:46:55 | 1511 | 0 | 72 | 1794890113654191,1794890236654561,1794890327654835,1794890420655115 |
+| `L11-burn2` | Linux host | whole package, 2 rounds, starved load | yes | readiness lifted, 5 s graces as written | 03:03:24 | 1780 | 0 | 36 | 1794890759656126,1794891293657729 |
+
+* **Findings, in five lines.** (1) Alone and idle, each wait is 1.4 to 12.3 s on the three hosts (`-race`), none near 30 s; it is
+  the connection's per-line `json.Valid` and `Unmarshal` at race speed, one goroutine's work, not the tap, the pipe, the write size
+  or `GOMAXPROCS`. (2) What moves it is how many of the four read at once: the Linux host's `TestDetachedTapIsPrefix` waits 10.6 s
+  alone, 25.3 s with the four bulk tests together and 25.8 s beside the module (2 of 10 rounds over 30 s); the Windows laptop's
+  4.5 s alone, 13.1 s with two, 28.4 s with four and 41.3 s in the whole package (10 of 10 rounds over 30 s, 3 of 3 with the
+  bounds as written); its sustained race-instrumented work also runs at a quarter of its first three seconds' speed. (3) Under the
+  starved load the wait is 90 to 116 s,
+  0.5 MiB/s, in 5 of 5 rounds; `Close`'s first step of the two 56 MiB tests is 12 to 18 s against its 5 s. (4) CI's race step passed
+  52 of 52 jobs, `agentproc` taking 22.9 to 50.7 s there; its CPU count is not in the logs. (5) The 5 s grace's failure of the
+  audit's round 1 is reproduced beside the starved load (c2: `Close` failed in 2 of 2 runs of each 56 MiB test), the first step
+  waiting for the agent's last 8 MiB at the connection's rate; four tests taking one scratch lock brought the Windows package's
+  waits to 6.8 to 14.0 s and the Linux module's longest to 24.0 s, which the report offers, with four other options, for the owner
+  to decide.
+* **Where the report is:**
+  [0057-REPORT-agentproc-56-mib-tests-30s-bound-measured.md](../reports/0057-REPORT-agentproc-56-mib-tests-30s-bound-measured.md),
+  with "What could follow": five options, each with what it changes, its cost and what comes first, one marked as the
+  recommendation. It decides nothing. This plan's status stays `in-progress`: the plan completes when the owner has decided what
+  follows.
+* **Deviations.** None stops the phase. Recorded in the report's "What distorted a measurement": two package chunks that held my
+  scratch experiments, one chunk that `run-on-host` ran on this Mac when its copy check failed, an exit status 2 that is my own
+  edit of a running script, a serialised-variant chunk whose root package lacked fixtures, and this Mac not being idle.
+* **Not verified:** CI's own per-test times and CPU count; why the Windows laptop slows with the number of tests and after
+  3 s of sustained load; the bounds' margins and breaks at any figure; the serialised variant under the starved load; FreeBSD;
+  the stamps' own cost. Ten runs or rounds is a sample, and the starved-load rows have 5 and 2 rounds.
+* **Files:** touched, this PLAN (this entry), the report and `docs/README.md` (its row). Not touched: any source, test, workflow or
+  tool. Scratch only: the stamped trees, scripts, tables and every chunk's output.
+* **Checks,** each after the last edit, in UTC, with the three files staged: `make check-records`, exit 0; `make markdownlint`,
+  exit 0 ("Linting: 58 files", "0 issues in 0 files"); `make disclosure-check`, exit 0 ("843 tracked file(s), 0 finding(s)"); a
+  scan of the three staged files for the hosts' names, the local account name, real-machine paths, queue tickets and leases found
+  none.
+  Staged, not committed, not pushed.
