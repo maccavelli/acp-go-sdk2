@@ -1250,7 +1250,11 @@ Checks that guard it:
   `TestCloseReadsTheAgentsLastOutput` and `TestTapDrainBoundedByGrace`, `LineTap`'s `TestLineTapFrames`,
   `TestLineTapCopies`, `TestLineTapHoldsUnended`, `TestLineTapNilFn` and `TestLineTapAsOutputTap`, and
   `TestExitedFirst` and `TestProcessWaitContext`, `InProcess`'s thirteen in `inprocess_test.go`,
-  `TestInProcessDetachedTapIsPrefix`, `TestInProcessServeAgentStep2`, under a grace of `slack`, and `TestWaitErrorSaysTheCauseOnce`, which
+  `TestInProcessDetachedTapIsPrefix`, under 5 s, and `TestInProcessServeAgentStep2`, under `slack`. The tests that need an
+  agent's exit, or a `Serve`'s return, seen within the first wait a grace bounds run under `exitGrace`, `slack` (3 s), and
+  the five bounds that are not a grace are `burstWait` (35 s), `tapErrorWait` (39 s), `tappedFramesGrace` (28 s),
+  `lastOutputGrace` (42 s) and `releasedWait` (35 s), as 0057-MADR-agentproc-test-graces-on-a-loaded-runner.md records; the
+  rest keep `testGrace` (300 ms) or the grace their comment states, and `TestWaitErrorSaysTheCauseOnce`, which
   requires `Wait`'s error to say its cause once, among them, the stderr tail's seven in
   `stderr_test.go`, the transcript's four
   in `transcript_test.go`, `TestTranscriptCloseAfterAbandon` among them, and the bounded close's seven in `closecontext_test.go`:

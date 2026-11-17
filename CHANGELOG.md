@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Made `agentproc`'s tests that need an agent's exit seen within a grace run under a grace of 3 s (`exitGrace`), and
+  rescaled five bounds that are not a grace (`burstWait` 35 s, `tapErrorWait` 39 s, `tappedFramesGrace` 28 s,
+  `lastOutputGrace` 42 s, `releasedWait` 35 s), so a loaded runner under `-race` no longer fails them; tests only.
 - Added the documentation defect list,
   [0056-REPORT-documentation-defect-list.md](docs/reports/0056-REPORT-documentation-defect-list.md): every statement
   in the repository's docs that the code contradicts, every feature no doc describes, and every exported member with no

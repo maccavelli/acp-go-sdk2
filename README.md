@@ -967,7 +967,9 @@ waits again; then it kills the group, or ends the job. Once the agent has
 exited, the connection reads to the end of the agent's output, up to the grace,
 and is closed. `Close` and `Wait` return the agent's exit error, joined with
 `agentproc.ErrTerminated` or `agentproc.ErrKilled` when `Close` had to
-escalate. `Kill` runs the same steps without their waits, ending the agent and
+escalate. An agent that exits at its input's end just as the grace ends can be
+reported with `agentproc.ErrTerminated` alone, terminated with a status of 0,
+because the SIGTERM was sent before its exit was seen. `Kill` runs the same steps without their waits, ending the agent and
 the processes it started at once, with `agentproc.ErrKilled`, and an agent that
 has exited is sent nothing; a `Close` in progress stops waiting and kills. When
 the agent exits, what is left of its group or job is killed; when the

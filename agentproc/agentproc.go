@@ -26,9 +26,12 @@ import (
 // Command.Grace is zero or less.
 const defaultGrace = 5 * time.Second
 
-// ErrTerminated is joined to Wait's error when the agent exited after Close
-// sent SIGTERM to its process group, or, for an InProcess agent, after Close
-// cancelled Serve's context with it.
+// ErrTerminated is joined to Wait's error when Close sent SIGTERM to the
+// agent's process group, or, for an InProcess agent, cancelled Serve's context
+// with it, before the agent's exit was seen. So an agent that exits at its
+// input's end just as the grace ends can be reported with ErrTerminated alone,
+// as terminated with a status of 0: its exit error is nil, and Wait returns
+// ErrTerminated by itself.
 var ErrTerminated = errors.New("agentproc: agent terminated")
 
 // ErrKilled is joined to Wait's error when Close or Kill killed the agent's

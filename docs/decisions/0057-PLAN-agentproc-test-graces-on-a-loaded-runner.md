@@ -1743,3 +1743,108 @@ Changed: `agentproc/agentproc_test.go`, `agentproc_unix_test.go`, `breakaway_win
 `waitcontext_test.go`; this PLAN, the MADR (the ruling) and `docs/README.md`. Not changed: any source file, workflow, script or
 tool. Scratch only, not staged: the plant and tree builders, `plants.py`, the chunk scripts, the tables and every chunk's output.
 Staged, not committed, not pushed.
+
+### 2026-11-16: phase 3 (the docs)
+
+Run by a lightweight-tier model at medium effort, as the phase prices it, on the coordinator's brief. `date +%F` printed
+2026-11-16. Base commit `f102c5a`, `main`, clean at the start.
+
+* **Approval.** The owner's ruling, relayed by the coordinator: "Run phases 1 to 4 through; then the report" (the approval entry
+  above, 2026-11-16). Phase 2's commit is `f102c5a`.
+* **Read:** this PLAN (Scope, the rule and its additions, phase 1b's addendum with the five figures, phase 2's record); the MADR's
+  F1 and W1 to W5; `git show f102c5a` for `agentproc/agentproc_test.go`, `tap_test.go` and `closecontext_test.go`, from which the
+  names and figures below are copied; `docs/architecture.md` at `:1240`-`:1264`; `0027-PLAN-agent-process-helper.md` at
+  `:200`-`:212`; `CHANGELOG.md`'s `Unreleased`; `README.md`'s `Close` paragraph; `agentproc/agentproc.go`'s `Wait`, `Close`'s `stop`,
+  `signal` and `agentError`. `AGENTS.md` and `tools/README.md` were searched in step 5, not read through.
+* **Figures, as the test files state them** (`git show f102c5a`): `exitGrace = slack` (3 s, `agentproc_test.go:38`);
+  `burstWait = 35 * time.Second` (`agentproc_test.go:45`); `releasedWait = 35 * time.Second` (`closecontext_test.go:175`);
+  `tappedFramesGrace = 28 * time.Second` (`tap_test.go:304`); `tapErrorWait = 39 * time.Second` (`tap_test.go:333`);
+  `lastOutputGrace = 42 * time.Second` (`tap_test.go:339`). Each matches phase 1b's addendum, "The five as measured".
+
+#### Steps
+
+1. **`docs/architecture.md:1253`-`:1257`.** Before: "`TestInProcessDetachedTapIsPrefix`, `TestInProcessServeAgentStep2`,
+   under a grace of `slack`, and `TestWaitErrorSaysTheCauseOnce`, which". After: "`TestInProcessDetachedTapIsPrefix`, under 5 s,
+   and `TestInProcessServeAgentStep2`, under `slack`. The tests that need an agent's exit, or a `Serve`'s return, seen within the
+   first wait a grace bounds run under `exitGrace`, `slack` (3 s), and the five bounds that are not a grace are `burstWait`
+   (35 s), `tapErrorWait` (39 s), `tappedFramesGrace` (28 s), `lastOutputGrace` (42 s) and `releasedWait` (35 s), as
+   0057-MADR-agentproc-test-graces-on-a-loaded-runner.md records; the rest keep `testGrace` (300 ms) or the grace their comment
+   states, and `TestWaitErrorSaysTheCauseOnce`, which". Also a correction of an earlier error: the old clause put
+   `TestInProcessDetachedTapIsPrefix` under `slack`, but it runs under 5 s (`inprocess_test.go:450`, `Grace: 5 * time.Second`).
+2. **`0027-PLAN-agent-process-helper.md:206`-`:209`.** The bullet "The grace in tests is 300 ms" is kept with its text and its
+   2026-10-30 amendment; appended: "(Amended 2026-11-16, by 0057: the tests that need an exit seen within a grace run under
+   `slack`, `exitGrace`, and five bounds that are not a grace are rescaled to 28 s to 42 s; see
+   [0057-PLAN-agentproc-test-graces-on-a-loaded-runner.md](0057-PLAN-agentproc-test-graces-on-a-loaded-runner.md).)"
+3. **`CHANGELOG.md:5`-`:7`,** the first bullet of `Unreleased`: "Made `agentproc`'s tests that need an agent's exit seen within a
+   grace run under a grace of 3 s (`exitGrace`), and rescaled five bounds that are not a grace (`burstWait` 35 s, `tapErrorWait`
+   39 s, `tappedFramesGrace` 28 s, `lastOutputGrace` 42 s, `releasedWait` 35 s), so a loaded runner under `-race` no longer fails
+   them; tests only." The phrase "tests only" is the PLAN's example's; the same commit also changes a doc comment (step 4) and a
+   README sentence, neither of them behaviour.
+4. **Question 4: `agentproc/agentproc.go:29`-`:35`,** `ErrTerminated`'s comment. Before: "ErrTerminated is joined to Wait's error when
+   the agent exited after Close sent SIGTERM to its process group, or, for an InProcess agent, after Close cancelled Serve's
+   context with it." After: "ErrTerminated is joined to Wait's error when Close sent SIGTERM to the agent's process group, or,
+   for an InProcess agent, cancelled Serve's context with it, before the agent's exit was seen. So an agent that exits at its
+   input's end just as the grace ends can be reported with ErrTerminated alone, as terminated with a status of 0: its exit error
+   is nil, and Wait returns ErrTerminated by itself."
+   The code the sentence rests on: `agentproc.go:659`, `case !p.hurried() && p.signal(p.agent.terminate, ErrTerminated) &&
+   p.exitedWithin(p.grace):`, which runs when step 1's `exitedWithin(p.grace)` has returned false (`:657`-`:658`); `:698`-`:709`,
+   `signal` sends unless `p.exited` is set (set at `:365`, when the wait returns), and then records `p.ended = why`; `:427`-`:442`,
+   `agentError`, with `ended` set and `waitErr` nil, returns `ended` alone. So the error is `ErrTerminated` with no exit error, and
+   the agent's status of 0 is not reported, whenever the send happens before the watcher records the exit. The MADR's F1 probe
+   measured status 0 with `ErrTerminated` in 15 of 20 runs, under a break that makes the first step wait 0 s.
+   **`README.md:970`-`:972`,** the `Close` paragraph, after "when `Close` had to escalate.": "An agent that exits at its input's end
+   just as the grace ends can be reported with `agentproc.ErrTerminated` alone, terminated with a status of 0, because the SIGTERM
+   was sent before its exit was seen." No code, identifier or other comment changed.
+   `make api` against `v1.36.0`, the latest tag (`git describe --tags --abbrev=0`): "check_api: against v1.36.0: 0 incompatible,
+   0 compatible"; and "check_api: reported packages unstable, remote: 0 incompatible, not gated"; exit 0.
+5. **Hit list.** `grep -rn` over the tree for `testGrace`, `slack`, `300 ms`, `300ms`, `grace of`, `exitGrace`, the five bounds'
+   names and the moved tests' names, in `*.md`, `*.go`, `*.py`, `*.yml`, `*.yaml`, `*.sh` and `Makefile`: 1,278 lines. The
+   non-record hits were read in full; the record hits (about 1,100 lines, under `docs/decisions/` and `docs/reports/`) were read
+   by file and by their grace lines, not line by line. Verdicts:
+   * `docs/architecture.md:1253`, "under a grace of `slack`": false, fixed (step 1).
+   * `docs/architecture.md:1245`-`:1263`, the test names: true, left. `docs/architecture.md:1424`, "the 300 ms a stream must last
+     under a 100 ms `WriteTimeout`": true, left; it is `remote`'s `TestHTTPServerWriteTimeout`, not these tests.
+   * `docs/decisions/0027-PLAN-agent-process-helper.md:206`, "The grace in tests is 300 ms": true on 2026-10-30, false now;
+     annotated by dated note (step 2). The other 0027 hits are the PLAN's record of its own past states: left.
+   * `tools/consumer.py:33`, "closes another under a 300 ms bound": true, left. It is the consumer program's own bound, not these
+     tests', as the brief says.
+   * `tools/test_tools.py:291`-`:292`, `TestKill$|TestKillAfterExit$`: a run filter, not a grace: true, left.
+   * `README.md`, `CHANGELOG.md`, `AGENTS.md`, `tools/README.md`, `docs/guides`: no hit other than the two edited above.
+   * `docs/README.md:124`-`:125` (0042's rows) and `:175`-`:176` (0057's rows): records; the 0057 rows' text is unchanged and still
+     true (five phases; in-progress).
+   * `docs/decisions/*` and `docs/reports/*`, the other records (0026, 0029, 0030, 0034, 0040 to 0044, 0049, 0052, 0055, and the
+     release notes 0030, 0032, 0041 to 0043, 0049): each a record of the state of its own time, for example
+     `0030-PLAN-record-initialize-on-arrival.md:1014`, "under `testGrace`, 300 ms", for `TestOutputTapVerbatim` as it then was.
+     Left: committed record text changes only by a dated addition, and only a current statement the change makes false needs one,
+     which is `0027`'s line 206.
+   * `docs/decisions/0057-*`: this record pair's own text: left.
+   * `agentproc/*_test.go` (not docs, and not in this phase's file list): the comment lines that name a grace were read in the
+     grep output, about sixty of them. No test file was edited. The lines I checked are still true: `start` at
+     `agentproc_test.go:95` keeps `testGrace`; `inprocess_test.go:385`, "Its grace is slack, not testGrace", for
+     `TestInProcessServeAgentStep2`, which keeps `slack`. I did not read each test file in full.
+   * `remote/*_test.go` (four lines): package `remote`'s own test names and graces, outside question 1's scope: left.
+
+#### Verification
+
+Each after the last edit, in UTC.
+
+* `make api`, through `run-heavy`: 2026-11-17T00:15:15Z to 00:15:25Z, exit 0; its result
+  lines are in step 4.
+* `make pre-add-check FILES="agentproc/agentproc.go"`, through `run-heavy`: 2026-11-17T00:15:32Z
+  to 00:17:25Z, exit 0; "go-precheck: 1 file(s) gofmt-clean; both modules linted, vetted and tested (-race -shuffle=on, uncached),
+  tidy, govulncheck."
+* `make check-records`, exit 0, 2026-11-17T00:18:43Z to 00:18:44Z ("python3 scripts/check_records.py --check-all", no finding).
+  `make markdownlint`, exit 0, 00:18:44Z to 00:18:46Z ("57 files", "0 issues in 0 files"; its glob leaves out the MADR and PLAN
+  files). `make disclosure-check`, exit 0, 00:18:46Z to 00:18:47Z ("842 tracked file(s), 0 finding(s)"). Run with the files staged.
+
+#### Not verified
+
+* Step 4's sentence rests on the code as read and the MADR's F1 probe; the case was not re-measured in this phase.
+* The CHANGELOG line says "tests only"; the same commit changes a comment and a README sentence, which are not behaviour.
+* The test files' comments were read in grep output only, and not edited.
+
+#### Files and staging
+
+Changed: `docs/architecture.md`, `docs/decisions/0027-PLAN-agent-process-helper.md` (one annotation), `CHANGELOG.md`, `README.md`,
+`agentproc/agentproc.go` (one comment), and this PLAN (this entry). Not changed: `docs/README.md` (the rows' text is unchanged);
+any test file, code, identifier, workflow or script. Staged, not committed, not pushed.

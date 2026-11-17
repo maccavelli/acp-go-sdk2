@@ -204,7 +204,9 @@ The release is proposed as the minor `v1.19.0`, which the owner confirms at the 
 * **`golang.org/x/sys` is updated by hand** (F11): nothing in the repository proposes its updates.
 * **The child modes live in a `_test.go` file,** so they ship in no binary.
 * **The grace in tests is 300 ms,** to keep the suite fast; the default stays 5 seconds. (Amended 2026-10-30, step 9:
-  `TestStderrHeldByDescendant` alone runs under `2 * slack`, 6 s.)
+  `TestStderrHeldByDescendant` alone runs under `2 * slack`, 6 s.) (Amended 2026-11-16, by 0057: the tests that need an exit
+  seen within a grace run under `slack`, `exitGrace`, and five bounds that are not a grace are rescaled to 28 s to 42 s; see
+  [0057-PLAN-agentproc-test-graces-on-a-loaded-runner.md](0057-PLAN-agentproc-test-graces-on-a-loaded-runner.md).)
 * **The Linux host joins the Windows host** in the pre-push checks from step 2.
 
 ## Execution record
