@@ -1253,7 +1253,10 @@ Checks that guard it:
   `TestInProcessDetachedTapIsPrefix`, under 5 s, and `TestInProcessServeAgentStep2`, under `slack`. The tests that need an
   agent's exit, or a `Serve`'s return, seen within the first wait a grace bounds run under `exitGrace`, `slack` (3 s), and
   the five bounds that are not a grace are `burstWait` (35 s), `tapErrorWait` (39 s), `tappedFramesGrace` (28 s),
-  `lastOutputGrace` (42 s) and `releasedWait` (35 s), as 0057-MADR-agentproc-test-graces-on-a-loaded-runner.md records; the
+  `lastOutputGrace` (42 s) and `releasedWait` (35 s), as 0057-MADR-agentproc-test-graces-on-a-loaded-runner.md records;
+  `TestBlockedTapDetached`, `TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix` and `TestTapDrainBoundedByGrace`,
+  which read 24 to 56 MiB through the connection under `-race`, take `bulkLock` in turn, so that no two read their megabytes at
+  once and each one's `readyWait` of 30 s waits for its own, as the same record's amendment after the report on them records; the
   rest keep `testGrace` (300 ms) or the grace their comment states, and `TestWaitErrorSaysTheCauseOnce`, which
   requires `Wait`'s error to say its cause once, among them, the stderr tail's seven in
   `stderr_test.go`, the transcript's four

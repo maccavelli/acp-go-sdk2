@@ -183,6 +183,33 @@ func blockedTap(t *testing.T) (*capture, func()) {
 	return &capture{gate: gate}, release
 }
 
+// bulkLock makes the four bulk tests read their megabytes one at a time. Under
+// -race the connection checks and decodes each 1 MiB line at 6 to 17 MiB/s,
+// and tests that read at once each wait longer than the same reads in turn:
+// on the Windows laptop's whole package three of the four waited 32 to 46 s
+// against readyWait's 30 s, and on a four-CPU Linux host beside the module one
+// waited 33 s. A test takes the lock in bulkTurn, before it launches its
+// agent, so its readyWait starts after the wait for the lock and its own
+// megabytes are the only ones read. See
+// 0057-MADR-agentproc-test-graces-on-a-loaded-runner.md, "Amendment
+// 2026-11-16, after phase 5's report", and
+// 0057-REPORT-agentproc-56-mib-tests-30s-bound-measured.md.
+var bulkLock sync.Mutex
+
+// bulkTurn takes bulkLock, and returns done, which releases it. Each test
+// calls it after t.Parallel and before it launches its agent, and calls done
+// once its megabytes are read; done is also registered with t.Cleanup, so a test
+// that fails or ends early releases the lock, and it releases it once. The
+// lock has no timeout: each holder is bounded by its own readyWait, and go
+// test's -timeout is the backstop.
+func bulkTurn(t *testing.T) (done func()) {
+	t.Helper()
+	bulkLock.Lock()
+	done = sync.OnceFunc(bulkLock.Unlock)
+	t.Cleanup(done)
+	return done
+}
+
 // tappedFramesGrace is tappedFrames' grace, which Close's first step, the
 // watcher's read of the agent's output and the drain of the taps each wait
 // at most: 28 s, five times the worst drain measured, 5.60 s, beside the
@@ -307,14 +334,19 @@ func TestTapsUnset(t *testing.T) {
 // before Close; Close returns within the grace and the slack; and, released,
 // the tap has received the stream's beginning
 // (0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21,
-// A1f and questions 9 and 10).
+// A1f and questions 9 and 10). It takes bulkLock before it launches its
+// agent and releases it once the agent is ready, so that readyWait bounds the
+// read of its own 48 MiB alone
+// (0057-MADR-agentproc-test-graces-on-a-loaded-runner.md).
 func TestBlockedTapDetached(t *testing.T) {
 	t.Parallel()
+	done := bulkTurn(t)
 	tap, release := blockedTap(t)
 	// The agent says it is ready once it has written its 48 MiB.
 	p, ready := launchTapped(t, "bulk", []string{bulkEnv + "=48", bulkMoreEnv + "=0"}, exitGrace, tap, nil)
 	t.Cleanup(release)
 	awaitReady(t, "bulk", ready)
+	done()
 	// At most the pipe's capacity, and a read's, are still unread.
 	const want, margin = 16 << 20, 256 << 10
 	deadline := time.Now().Add(readyWait)
@@ -349,13 +381,18 @@ func TestBlockedTapDetached(t *testing.T) {
 // the first byte it lost: the tap blocks until it is detached, is released
 // while the agent still has 8 MiB to write, and what it received is the
 // stream's beginning (0030-MADR-record-initialize-on-arrival.md, the
-// amendment of 2026-10-21, question 9).
+// amendment of 2026-10-21, question 9). It takes bulkLock before it launches
+// its agent and releases it once the agent is ready, so that readyWait bounds
+// the read of its own 56 MiB alone
+// (0057-MADR-agentproc-test-graces-on-a-loaded-runner.md).
 func TestDetachedTapIsPrefix(t *testing.T) {
 	t.Parallel()
+	done := bulkTurn(t)
 	tap, release := blockedTap(t)
 	p, ready := launchTapped(t, "bulk", []string{bulkEnv + "=56", bulkMoreEnv + "=8"}, 5*time.Second, tap, nil)
 	t.Cleanup(release)
 	awaitReady(t, "bulk", ready)
+	done()
 	deadline := time.Now().Add(readyWait)
 	for out, _ := p.DroppedTapBytes(); out == 0; out, _ = p.DroppedTapBytes() {
 		if time.Now().After(deadline) {
@@ -434,11 +471,16 @@ func TestCloseReadsTheAgentsLastOutput(t *testing.T) {
 // (0030-MADR-record-initialize-on-arrival.md, the amendment of 2026-10-21, A1e
 // and question 11). A tap that was merely slow could keep pace with an agent
 // read slowly, as under the race detector on Windows, and leave nothing queued
-// (0034-MADR-race-detector-on-windows-ci.md, R6 to R8).
+// (0034-MADR-race-detector-on-windows-ci.md, R6 to R8). It takes bulkLock
+// before it launches its agent and releases it once the agent is ready, so
+// that readyWait bounds the read of its own 24 MiB alone
+// (0057-MADR-agentproc-test-graces-on-a-loaded-runner.md).
 func TestTapDrainBoundedByGrace(t *testing.T) {
 	t.Parallel()
+	done := bulkTurn(t)
 	tap, release := blockedTap(t)
 	p := startTapped(t, "bulk", []string{bulkEnv + "=24", bulkMoreEnv + "=0"}, exitGrace, tap, nil)
+	done()
 	// Registered after startTapped's Close, so that it runs first.
 	t.Cleanup(release)
 	if err := p.Conn().Connection().SendNotification(t.Context(), "_test/go", map[string]any{}); err != nil {

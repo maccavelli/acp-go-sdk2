@@ -440,9 +440,13 @@ func rootDir(t *testing.T) string {
 // dropped (0042-MADR-in-process-agent-runner.md, "Confirmation"). As the
 // child test waits for its agent's ready, this waits for the first Write to
 // return, so that Close's grace covers the last 8 MiB alone
-// (0042-PLAN-in-process-agent-runner.md, phase 11's deviation).
+// (0042-PLAN-in-process-agent-runner.md, phase 11's deviation). It takes
+// bulkLock before it starts Serve and releases it once the first Write has
+// returned, so that readyWait bounds the read of its own 56 MiB alone
+// (0057-MADR-agentproc-test-graces-on-a-loaded-runner.md).
 func TestInProcessDetachedTapIsPrefix(t *testing.T) {
 	t.Parallel()
+	done := bulkTurn(t)
 	tap, release := blockedTap(t)
 	more, wrote := make(chan struct{}), make(chan struct{})
 	stream := bulk64()
@@ -467,6 +471,7 @@ func TestInProcessDetachedTapIsPrefix(t *testing.T) {
 	case <-time.After(readyWait):
 		t.Fatalf("the connection did not read Serve's first 56 MiB within %v", readyWait)
 	}
+	done()
 	deadline := time.Now().Add(readyWait)
 	for out, _ := p.DroppedTapBytes(); out == 0; out, _ = p.DroppedTapBytes() {
 		if time.Now().After(deadline) {

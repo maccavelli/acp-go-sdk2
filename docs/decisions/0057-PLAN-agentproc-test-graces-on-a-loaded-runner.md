@@ -97,6 +97,14 @@ Out of scope still: any product code; the four tests' bounds and data; the starv
 the rule above stands unchanged. Once it has, the rule is question 6's answer (below); under the in-process starved load the four
 stay counted apart whatever the answer, since the owner's decision does not ask them to pass there. A serialised test over 30 s on
 the Linux host or the Windows laptop in phase 6's confirmation is a stop for the owner, not a count apart.
+*Added 2026-11-16, at phase 6, by the owner's ruling, relayed by the coordinator, "Judge them like every other test there"
+(question 6, answered (a)). As put to the owner: a failure of one of the four on the Linux host or the Windows laptop stops a
+phase, as for any test; the race gate of record stays this Mac's; under the artificial starved load they stay counted apart
+whatever is chosen. Options not chosen: also make those two runs gates of record; keep them counted apart until a longer series.*
+It takes effect when phase 6's confirmation has passed, as the first sentence of this section says: until then the rule of "Where
+the race gates run" stands unchanged; after it, `TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix`,
+`TestBlockedTapDetached` and `TestTapDrainBoundedByGrace` are judged on those two hosts like every other test, outside the starved
+load.
 
 **The rule each test is classified by** (the constant's comment carries it):
 
@@ -289,6 +297,11 @@ decision on the report: it completes when phase 6's acceptance is met.
 
 ### Phase 6: the four bulk tests one at a time (mid tier, high effort)
 
+*Approved 2026-11-16, by the owner's ruling, relayed by the coordinator, "Run it through its confirmation". As put to the owner:
+one mainstream agent executes the phase; the coordinator reviews, runs its own gate and commits, then CI; it stops for the owner if
+a serialised test still exceeds 30 s, or a 56 MiB test's close still exceeds 5 s with the lock held through it. Options not chosen:
+run only its first two steps, then stop; hold it.*
+
 *Added 2026-11-16, after phase 5's report, by the owner's ruling "Run the four tests one at a time", relayed by the coordinator; the
 MADR's amendment "after phase 5's report".* Runs after phase 5. Line numbers are `a82d483`'s. Every `-race` run through
 `run-on-host --need linux --race`, `--need windows --race` or `run-heavy` on this Mac, never a WSL distro, one heavy run at a time
@@ -460,6 +473,12 @@ the chosen decision. The options are kept as they were put.
      the lock's effect stays unjudged in the gates.
 
    Phase 6 runs to its confirmation without the answer; only the rule that follows the confirmation waits for it.
+
+   * **Answered (a), 2026-11-16,** the owner's ruling, relayed by the coordinator: "Judge them like every other test there". As put
+     to the owner: a failure of one of the four on the Linux host or the Windows laptop stops a phase, as for any test; the race
+     gate of record stays this Mac's; under the artificial starved load they stay counted apart whatever is chosen. Not chosen:
+     also make those two runs gates of record; keep them counted apart until a longer series. It takes effect when phase 6's
+     confirmation has passed ("Where the race gates run, after the lock").
 
 ## Execution record
 
@@ -2315,3 +2334,316 @@ PLAN's execution record from phase 1b on and the report in full.
     (new); phase 5's acceptance (an annotation); phase 6 (new); Verification (a table added); "Question after the report, open"
     (new); the phase 5 entry's completion sentence (an annotation); this entry;
   * `docs/README.md`: the MADR's and this PLAN's rows.
+
+### 2026-11-16: phase 6 (the four bulk tests one at a time)
+
+Run by a mainstream-tier model at high effort, as the phase prices it, on the coordinator's brief. `date +%F` printed 2026-11-16;
+the times below are UTC, so the runs fall on 2026-11-17. Base commit `5076ce2`, `main`, level with `origin/main`, tree clean at
+the start. The phase changes `agentproc`'s test files, the docs this PLAN names and the records; no source, workflow, script or
+tool, and no bound, grace or data size.
+
+* **The decision and the rulings.** The owner's decision "Run the four tests one at a time" (the entry "2026-11-16: the owner's
+  decision on the report"); the owner's ruling, relayed by the coordinator, "Run it through its confirmation" (phase 6's
+  approval, recorded under the phase's heading); the owner's ruling, relayed by the coordinator, "Judge them like every other test
+  there" (question 6, answered (a); recorded under question 6 here and in the MADR, and in "Where the race gates run, after the
+  lock", taking effect when this phase's confirmation has passed); and, added by the coordinator while the phase ran, the owner's
+  ruling, relayed by the coordinator, "Accept it and record the cause" (step 1, below, and the MADR's section "The rise without
+  `-race`, explained").
+* **Read:** this PLAN (the Goal's and Scope's additions, "Where the race gates run" with "after the lock", phase 6, phases 4 and
+  5's records, question 6), the MADR's amendment "after phase 5's report", the report in full (its method, its serialised
+  variant, its distortions), `agentproc/tap_test.go`, `inprocess_test.go`, `agentproc_test.go` and `agentproc.go`'s `stop`,
+  `AGENTS.md`, `tools/README.md`, `.github/workflows/ci.yml`, and the skills `available-dev-hosts` and `madr-and-plan-writing`.
+* **Method.** Every experiment, plant and measurement ran in a scratch copy (`git archive` of `5076ce2`, or of the earlier
+  commits, plus this phase's edits as a script that asserts each edit lands once), never in the tree; the stamped copies add
+  observation only (one JSON line per event, none unless an environment variable is set) and a planted readiness bound that does
+  not end the wait: the wait runs as it would, is measured, and the test then fails if it was longer than the bound the
+  environment sets. Every heavy run went through `run-on-host --need linux --race`, `--need windows --race` or `run-heavy` on
+  this Mac (never a WSL distro), one at a time on each host, from a scratch copy of the tree, nothing writing into a copy while
+  it shipped. "Seconds" in the chunk table is the dispatcher's, a queue wait included.
+
+#### Step 1: the rise without `-race`, explained
+
+Linux host, `go test -json -shuffle=on -count=5 ./agentproc/`, no `-race`, scratch copies of `032320a` and `f102c5a`, each test's
+`Elapsed` from the JSON, the median of five rounds (chunks `S1-r032320a-a`, `S1-rf102c5a-a`). The package took 41.1 s over the
+five rounds before (8.2 s a round) and 100.6 s after (20.1 s a round); CI's step took 7.4 to 9.6 s before and 20.4 to 21.1 s after
+(the report, "The machines"). Seventeen leaf tests (a test with no subtests of its own, or a subtest) grew by 0.5 s or more; none
+of the other 78 leaves grew by 0.1 s, and none shrank. The sum of the 95 leaves' medians rose from 27.8 s to 74.8 s, 47.0 s of it
+in these seventeen; all seventeen are parallel tests, and at four at once (`-parallel`'s default on four CPUs) that is 11.75 s,
+against the package's rise of 11.9 s a round. The coordinator's preview (one run each, this Mac) named the same seventeen; this
+Linux measurement gives the same set, with `TestInProcessKill` at 5.40 s, `TestCloseContextWaitsForHandlers` at 1.35 s and the
+other fifteen at 2.60 to 2.72 s.
+
+| Test or subtest | Before (`032320a`), s | After (`f102c5a`), s | Growth, s | The wait it sits out |
+| :--- | ---: | ---: | ---: | :--- |
+| `TestInProcessKill` | 0.60 | 6.00 | 5.40 | two graces: the first step (Serve ignores its input's end) and the second (it ignores its context), then the kill (`inprocess_test.go:131`) |
+| `TestBlockedTapDetached` | 0.77 | 3.49 | 2.72 | `Close`'s drain of a tap still blocked when the agent has exited, bounded by the grace (`tap_test.go`) |
+| `TestCloseContextBoundsHandlers/in_process,_CloseContext` | 0.30 | 3.00 | 2.70 | `const bound = exitGrace`: the context's bound, which a handler that ignores its context outlasts (`closecontext_test.go`) |
+| `TestCloseContextBoundsHandlers/in_process,_KillContext` | 0.30 | 3.00 | 2.70 | the same bound, `exitGrace` |
+| `TestCloseContextCause` | 0.30 | 3.00 | 2.70 | the context's timeout, `exitGrace`, outlasted by a handler that ignores its context |
+| `TestCloseContextJoinsTheAgentsError` | 0.30 | 3.00 | 2.70 | the context's timeout, `exitGrace`, outlasted by a handler that ignores its context |
+| `TestInProcessTerminate` | 0.30 | 3.00 | 2.70 | the first step, one grace (Serve ignores its input's end), then the second step ends it |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_returning_its_cause` | 0.30 | 3.00 | 2.70 | the first step, one grace, then step 2 |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_returning_its_own_error` | 0.30 | 3.00 | 2.70 | the first step, one grace, then step 2 |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_wrapping_its_cause` | 0.30 | 3.00 | 2.70 | the first step, one grace, then step 2 |
+| `TestCloseContextBoundsHandlers/a_child,_CloseContext` | 0.33 | 3.03 | 2.70 | the same bound, `exitGrace` |
+| `TestCloseLadder/exits_on_SIGTERM` | 0.31 | 3.01 | 2.70 | the first step, one grace (the agent ignores its input's end), then SIGTERM, which it exits on (class B) |
+| `TestCloseContextBoundsHandlers/a_child,_KillContext` | 0.32 | 3.01 | 2.69 | the same bound, `exitGrace` |
+| `TestTapDrainBoundedByGrace` | 0.58 | 3.23 | 2.65 | the same drain of a blocked tap, bounded by the grace (`tap_test.go`) |
+| `TestEscapedDescendantDoesNotHoldWait` | 0.83 | 3.43 | 2.60 | the watcher's grace for an escaped descendant's hold on the agent's output (`agentproc_unix_test.go:92`) |
+| `TestTapKeepsCloseEnding` | 0.43 | 3.03 | 2.60 | the same watcher's grace, with an output tap (`agentproc_unix_test.go:120`) |
+| `TestCloseContextWaitsForHandlers` | 0.15 | 1.50 | 1.35 | the handler's release, `exitGrace/2`, which `CloseContext` waits for |
+| 17 tests and subtests | | | 47.01 | |
+
+**The cause, in one sentence:** each of the seventeen sits a whole grace out by design (the agent is meant not to exit in the
+first step, a handler is meant to ignore its context, or a tap is meant to stay blocked), and the grace went from 300 ms to 3 s.
+The product has one grace for every step of `Close` (`Process.grace`: `agentproc.go:661` and `:662`, the first and the second
+step; `:371`, the watcher's wait on the agent's output; `:532`, the taps' drain), so a test that needs the exit seen within the
+second step cannot skip the first step's wait, and a test that needs a drain bounded by the grace waits it out.
+
+**Whether anything reduces it without weakening a test.** One candidate was measured, and none was made. `-parallel=16`
+(chunk `S1-rf102c5a-p16`, the same five rounds at `f102c5a`, no `-race`, one host) took the package to 34.2 s, 6.8 s a round,
+under the 8.2 s before: the seventeen tests wait on timers, not on CPU. It changes CI's command, not a test, and puts more tests
+at once on the timing-sensitive ones, which is the load this PLAN was opened to remove; it is the option the owner did not choose.
+A shorter grace for the seventeen (for example 1.5 s) changes the tests and cuts their margin against a loaded runner from about
+five times to about two; also not chosen. **The owner's ruling, relayed by the coordinator, "Accept it and record the cause".**
+As put to the owner: about 12 s more CI per run is the measured price of the fix; phase 6 records the per-test table and the
+reason in the PLAN and the decision record; nothing changes in the tests or CI, and the margin against the original flake stays at
+five times. Options not chosen: a shorter grace for the tests that sit one out (for example 1.5 s, cutting their margin against a
+loaded runner from about five times to about two); run more of the package's tests at once in CI (a workflow change that puts
+more load on the timing-sensitive tests). No reduction is made and no question about it is open. The MADR has the table, the
+cause and the ruling ("The rise without `-race`, explained", and the annotation on the first decision's cost).
+
+#### Step 2: `Close`'s first step under the lock, measured
+
+A scratch copy of `HEAD` with the lock released at "ready" (the form the report measured), stamped: `Close`'s first step is
+`exitedWithin(grace)` after `closeInput` (`agentproc.go:656` to `:663`); the stamp is the time from the input closed to the exit
+seen, and whether it was seen (a first step that ends without the exit seen ends in SIGTERM and `ErrTerminated`, the audit's round
+1 failure). Chunks `S2-L1` to `S2-L4` (the Linux host, the root module as CI's step runs it, `go test -race -shuffle=SEED
+-count=1 ./...`, 20 rounds) and `S2-W1` to `S2-W4` (the Windows laptop, the whole package, 20 rounds). All 40 rounds passed
+every test; no first step ended without the exit seen; none exceeded 5 s.
+
+| Host, 20 rounds, `-race`, the lock released at "ready" | Test | First step: median / max, s | `Close`: median / max, s | Over 5 s | Exit not seen |
+| :--- | :--- | :--- | :--- | ---: | ---: |
+| the Linux host, beside the module | `TestDetachedTapIsPrefix` | 2.9 / 4.5 | 3.2 / 4.8 | 0 | 0 |
+| the Linux host, beside the module | `TestInProcessDetachedTapIsPrefix` | 2.1 / 3.9 | 2.3 / 4.3 | 0 | 0 |
+| the Windows laptop, the whole package | `TestDetachedTapIsPrefix` | 2.6 / 3.8 | 2.9 / 4.2 | 0 | 0 |
+| the Windows laptop, the whole package | `TestInProcessDetachedTapIsPrefix` | 2.3 / 4.0 | 2.6 / 4.5 | 0 | 0 |
+
+The report's unlocked figures, beside them: the Linux host beside the module, first step 2.76 s median and 4.78 s at most for
+`TestDetachedTapIsPrefix`, 3.46 s and 5.93 s for `TestInProcessDetachedTapIsPrefix` (1 of 10 over 5 s); the Windows laptop's
+package, 2.25 s median and 2.99 s at most, and 4.22 s and 4.70 s. **What it decided: no first step exceeds 5 s, so, as the phase
+says, the lock ends at "ready", as the report measured it; it is not held through `Close`, and the stop "a first step still
+exceeds 5 s with the lock held through `Close`" does not arise.** The margin on the Linux host is 0.5 s at the worst of 20 rounds
+(4.5 s of 5 s; see "Not verified"); the Windows laptop's 10 proof rounds, which carry the same lock, reached 4.3 s. The 5 s
+grace is unchanged.
+
+#### The lock as built
+
+Test files only. `agentproc/tap_test.go:197` `var bulkLock sync.Mutex`, with the comment that says what it is for and cites the
+MADR and the report; `:205` `bulkTurn(t) (done func())`, which takes `bulkLock`, registers `done` with `t.Cleanup` through a
+`sync.OnceFunc` so that a test that fails or ends early releases it, and returns it. Each of the four calls it after
+`t.Parallel()` and before it launches its agent, and calls `done` once its megabytes are read:
+
+| Test | `bulkTurn` | `done()` | |
+| :--- | :--- | :--- | :--- |
+| `TestBlockedTapDetached` | `tap_test.go:343`, before `launchTapped` | `:349`, after `awaitReady` | |
+| `TestDetachedTapIsPrefix` | `tap_test.go:390`, before `launchTapped` | `:395`, after `awaitReady` | |
+| `TestTapDrainBoundedByGrace` | `tap_test.go:480`, before `startTapped` | `:483`, once it returns, its "ready" being inside it | |
+| `TestInProcessDetachedTapIsPrefix` | `inprocess_test.go:449`, before `startInProcess` | `:474`, once `wrote` is closed | |
+
+The readiness bound starts after the lock is taken, so the wait for the lock is not in the 30 s; the lock has no timeout (each
+holder is bounded by its own `readyWait` and releases on failure, and `go test`'s `-timeout` is the backstop). A waiting test holds
+one of the package's parallel slots. The comments are in `agentproc_test.go:54` to `:60` (`readyWait`) and in the four tests' doc
+comments. Checked: the amended tree's test code, with comment lines dropped, equals the scratch lock tree's that the proofs ran
+(`samecode.py`: 25 files, none differing); the confirmation ran on the amended tree itself.
+
+#### The proof
+
+*On the Windows laptop, the whole package, `-race`.* `HEAD` (`P-W-head`, unstamped, `-count=5`): `TestBlockedTapDetached`,
+`TestDetachedTapIsPrefix` and `TestInProcessDetachedTapIsPrefix` failed in each of 5 rounds, 15 of 15, each with the readiness
+message (`tap_test.go:317` and `:358`: "the bulk agent did not say it was ready within 30s"; `inprocess_test.go:468`: "the
+connection did not read Serve's first 56 MiB within 30s"), and nothing else failed: a failure rate of 5 of 5 here, 10 of 10 in the
+report, so 5 failing rounds and 10 clean ones are a proof. `HEAD` stamped, no lock (`P-W-nolock-s`): the same three, 5 of 5, at
+30.2 to 31.1 s. The amended tree: `P-W-lock` (unstamped, `-count=10`) passed all 104 tests in each of 10 rounds, the four included
+(10 passes each); `P-W-lock-s` (stamped, 10 rounds) the same. The waits, `-race`, the whole package:
+
+| Test | `HEAD`, stamped, 5 rounds: min / median / max, s | The lock, 30 rounds (20 of step 2, 10 of `P-W-lock-s`): median / max, s |
+| :--- | :--- | :--- |
+| `TestBlockedTapDetached` | all 5 timed out at the 30 s bound | 9.6 / 17.9 |
+| `TestDetachedTapIsPrefix` | all 5 timed out at the 30 s bound | 12.1 / 20.9 |
+| `TestInProcessDetachedTapIsPrefix` | all 5 timed out at the 30 s bound | 11.0 / 18.3 |
+| `TestTapDrainBoundedByGrace` | 20.4 / 22.0 / 23.1 | 6.1 / 9.0 |
+
+*`TestTapDrainBoundedByGrace`'s planted bound.* No real condition fails it at 30 s (the report: 19.2 s at most in the Windows
+package), so its proof is a planted readiness bound in the scratch copies only: 12 s, set before the runs between the report's
+serialised maximum, 7.5 s, and its unserialised minimum, 15.9 s, in the Windows package, and checked afterwards against this
+phase's waits (9.0 s at most with the lock over 30 runs; 20.4 s at least without it over 5). `HEAD` stamped: the planted bound
+failed it in each of 5 rounds ("planted readiness bound: TestTapDrainBoundedByGrace waited 20.45s, bound 12s", and four more at
+21.7 to 23.1 s); the lock, 10 rounds: 0 failures, its waits 5.2 to 8.5 s. The tree's 30 s does not change.
+
+*On the Linux host, the measured proof.* Where the report found one of the four over 30 s in 2 of 10 unlocked module rounds, 0
+failures in 14 rounds is the fewest that excludes a 1 in 5 rate, so the proof is the measured wait: the 20 module rounds of step
+2, which are the same lock as the amended tree's (the lock ends at "ready") with stamps, every wait recorded. The longest waits
+to "ready", against 30 s: 21.4 s (`TestBlockedTapDetached`; median 14.0), 20.5 s (`TestDetachedTapIsPrefix`; 14.8),
+20.5 s (`TestInProcessDetachedTapIsPrefix`; 12.5) and 9.2 s (`TestTapDrainBoundedByGrace`; 6.1); none over 30 s, no timeout, no
+failure in 20 of 20 rounds. The report's unlocked figures beside the module: medians 22.3 to 25.8 s and 32.8 s at most (10
+rounds, 2 over 30 s); its scratch serialised variant, 14.0 to 17.9 s and 24.0 s at most (7 rounds). The waits for the lock itself
+(not in the 30 s) were 0 to 30.9 s on the Linux host and 0 to 41.1 s on the Windows laptop.
+
+#### The breaks: "one of the four does not take the lock"
+
+One scratch copy of the amended tree for each of the four, the stamped copy with that test's `bulkTurn` replaced by a helper that
+takes no lock, run as the Windows proof (the whole package, `-race`, 5 rounds each; chunks `B-W-blocked`, `B-W-detached`,
+`B-W-inproc`, `B-W-drain`), all four bounds planted at once (20, 23, 20 and 12 s: each above the 30 locked runs' longest wait
+of its test, 17.9, 20.9, 18.3 and 9.0 s, set before the runs), the 30 s bound as written. A break must fail the way `HEAD` does
+in at least 4 of 5 rounds; where the one unlocked test beside the three locked ones does not reach 30 s, the plan has the
+planted bound serve.
+
+| Test not taking the lock | Plant, s | Locked waits (30 runs): max, s | Break's waits (5 runs): min / median / max, s | Failed, of 5 rounds | By the plant | By the 30 s bound | Others' failures in the same rounds |
+| :--- | ---: | ---: | :--- | ---: | ---: | ---: | :--- |
+| `TestBlockedTapDetached` | 20 | 17.9 | 24.1 / 25.0 / 27.1 | 5 | 5 | 0 | `TestInProcessDetachedTapIsPrefix` 2, `TestTapDrainBoundedByGrace` 4 |
+| `TestDetachedTapIsPrefix` | 23 | 20.9 | 30.2 / 30.4 / 30.9 | 5 | 4 | 1 | `TestBlockedTapDetached` 2, `TestInProcessDetachedTapIsPrefix` 3, `TestTapDrainBoundedByGrace` 1 |
+| `TestInProcessDetachedTapIsPrefix` | 20 | 18.3 | 25.6 / 26.0 / 27.3 | 5 | 5 | 0 | `TestBlockedTapDetached` 3, `TestDetachedTapIsPrefix` 2 |
+| `TestTapDrainBoundedByGrace` | 12 | 9.0 | 12.0 / 12.9 / 13.9 | 5 | 5 | 0 | `TestBlockedTapDetached` 1, `TestDetachedTapIsPrefix` 2, `TestInProcessDetachedTapIsPrefix` 1 |
+
+Each break failed its own test in 5 of 5 rounds. Three failed it by the planted bound only (its wait did not reach 30 s beside
+the three locked tests); `TestDetachedTapIsPrefix`'s wait reached 30 s in 1 round (the real bound) and the planted one failed it
+in the other 4. The other tests' failures in the same rounds are the unlocked test's reading overlapping theirs: they are not a
+locked test failing alone; in one round of `B-W-detached` (round 4) `TestInProcessDetachedTapIsPrefix`'s `Close` failed at its 5
+s first step ("agentproc: agent terminated"), with the unlocked `TestDetachedTapIsPrefix` reading beside it, a failure the lock
+prevents. The margin of the last row is thin: `TestTapDrainBoundedByGrace`'s waits without the lock were 12.0 to
+13.9 s against a plant of 12 s (the first at 12.008 s) and 9.0 s with it, so the plant separates the two by 3 s but the break
+clears it by 0.008 s at the least; 5 of 5 failed, and the plant was not re-set after seeing it. No break was one that no plant
+could fail.
+
+#### The docs
+
+* `docs/architecture.md:1257` to `:1260`, the sentence on `agentproc`'s checks: the four take `bulkLock` in turn, why, and the
+  MADR's amendment cited. `CHANGELOG.md`, `Unreleased`: one line for the lock, with the rise's cause in one sentence, tests only.
+* `agentproc/agentproc_test.go:54` to `:60`, `readyWait`'s comment; the four tests' doc comments (`tap_test.go`,
+  `inprocess_test.go`); `bulkLock`'s and `bulkTurn`'s own.
+* The race gates' rule, as question 6's answer gives it: "Where the race gates run, after the lock" (a paragraph added), question
+  6 (an answer added), in this PLAN; and in the MADR, question 6. It takes effect when this phase's confirmation has passed, which
+  the coordinator's commit and CI follow.
+* `docs/README.md`, the 0057 MADR and PLAN rows (the rulings, phase 6's run).
+* Every other hit of a `grep -rn` of the repository for the four tests' names and `readyWait` was read: the older records that
+  name them (0030, 0031, 0034, 0040, 0042, 0055) are history of what each decided or saw and stay as they are; none states how
+  the four are run today. Searched: `docs/`, `README.md`, `CHANGELOG.md`, `AGENTS.md`, `tools/`, `agentproc/`.
+
+#### The confirmation
+
+Phase 4's rounds again, on the amended tree (scratch copy of `HEAD` with the three test files overlaid), judged as every test
+is, the four included, none counted apart (the starved load was not run). Every chunk run is in the table; none was re-run,
+cancelled or lost.
+
+| Chunk | Host | Kind | What | Rounds | Seeds | Start (UTC) | Seconds | Exit | Failed tests |
+| :--- | :--- | :--- | :--- | ---: | :--- | :--- | ---: | :--- | :--- |
+| `S1-r032320a-a` | the Linux host | step 1 | `go test -json -shuffle=on -count=5 ./agentproc/` at `032320a`, no `-race` | 5 | - | 2026-11-17 03:57:20 | 51 | 0 | none |
+| `S1-rf102c5a-a` | the Linux host | step 1 | the same at `f102c5a` | 5 | - | 2026-11-17 03:58:10 | 110 | 0 | none |
+| `S1-rf102c5a-p16` | the Linux host | step 1 | the same at `f102c5a` with `-parallel=16` (a candidate, not made) | 5 | - | 2026-11-17 04:01:07 | 44 | 0 | none |
+| `S2-L1` | the Linux host | step 2 | root module, `go test -race -shuffle=SEED -count=1 ./...`, 5 rounds, scratch lock released at ready, stamped | 5 | 1794893512664385, 1794893626664728, 1794893711664984, 1794893796665240, 1794893892665529 | 2026-11-17 04:02:04 | 481 | 0 | none |
+| `S2-L2` | the Linux host | step 2 | root module, `go test -race -shuffle=SEED -count=1 ./...`, 5 rounds, scratch lock released at ready, stamped | 5 | 1794893994665831, 1794894118666204, 1794894207666472, 1794894293666731, 1794894382666999 | 2026-11-17 04:10:05 | 476 | 0 | none |
+| `S2-L3` | the Linux host | step 2 | root module, `go test -race -shuffle=SEED -count=1 ./...`, 5 rounds, scratch lock released at ready, stamped | 5 | 1794894470667259, 1794894575667575, 1794894659667828, 1794894739668069, 1794894820668313 | 2026-11-17 04:18:01 | 437 | 0 | none |
+| `S2-L4` | the Linux host | step 2 | root module, `go test -race -shuffle=SEED -count=1 ./...`, 5 rounds, scratch lock released at ready, stamped | 5 | 1794894908668573, 1794895010668880, 1794895089669118, 1794895169669359, 1794895251669606 | 2026-11-17 04:25:19 | 430 | 0 | none |
+| `S2-W1` | the Windows laptop | step 2 | whole package, `-race`, 5 rounds, scratch lock released at ready, stamped | 5 | 1794893517664400, 1794893567664551, 1794893614664693, 1794893664664844, 1794893714664995 | 2026-11-17 04:02:04 | 259 | 0 | none |
+| `S2-W2` | the Windows laptop | step 2 | whole package, `-race`, 5 rounds, scratch lock released at ready, stamped | 5 | 1794893777665180, 1794893829665337, 1794893881665494, 1794893931665645, 1794893982665799 | 2026-11-17 04:06:23 | 269 | 0 | none |
+| `S2-W3` | the Windows laptop | step 2 | whole package, `-race`, 5 rounds, scratch lock released at ready, stamped | 5 | 1794894046665987, 1794894097666141, 1794894147666292, 1794894197666443, 1794894250666603 | 2026-11-17 04:10:52 | 263 | 0 | none |
+| `S2-W4` | the Windows laptop | step 2 | whole package, `-race`, 5 rounds, scratch lock released at ready, stamped | 5 | 1794894310666779, 1794894361666933, 1794894409667078, 1794894457667223, 1794894508667377 | 2026-11-17 04:15:16 | 261 | 0 | none |
+| `W00-smoke` | the Windows laptop | smoke | scratch lock tree, 1 round, `-race` | 1 | 1794893235663554 | 2026-11-17 03:57:20 | 62 | 0 | none |
+| `P-W-head` | the Windows laptop | proof | `HEAD`, `go test -race -shuffle=on -count=5 -v -timeout=40m ./agentproc/` | 5 | 1794889210251083900 | 2026-11-17 04:20:00 | 224 | 1 | `TestBlockedTapDetached` 5x, `TestDetachedTapIsPrefix` 5x, `TestInProcessDetachedTapIsPrefix` 5x |
+| `P-W-nolock-s` | the Windows laptop | proof | `HEAD` stamped, no lock, 5 rounds, planted drain bound 12 s | 5 | 1794894818668303, 1794894862668436, 1794894905668566, 1794894947668693, 1794894990668823 | 2026-11-17 04:23:44 | 227 | 1 | `TestBlockedTapDetached` 5x, `TestDetachedTapIsPrefix` 5x, `TestInProcessDetachedTapIsPrefix` 5x, `TestTapDrainBoundedByGrace` 5x |
+| `P-W-lock` | the Windows laptop | proof | the lock, `go test -race -shuffle=on -count=10 -v -timeout=40m ./agentproc/` | 10 | 1794889672819246700 | 2026-11-17 04:27:42 | 512 | 0 | none |
+| `P-W-lock-s` | the Windows laptop | proof | the lock, stamped, 10 rounds, planted drain bound 12 s | 10 | 1794895809671276, 1794895860671430, 1794895910671581, 1794895961671735, 1794896010671883 | 2026-11-17 04:36:15 | 762 | 0 | none |
+| `B-W-blocked` | the Windows laptop | break | the lock, stamped, `blocked` not taking it, 5 rounds, planted bounds 20, 23, 20 and 12 s | 5 | 1794895563670538, 1794895612670686, 1794895659670828, 1794895706670970, 1794895755671118 | 2026-11-17 04:33:48 | 393 | 1 | `TestBlockedTapDetached` 5x, `TestInProcessDetachedTapIsPrefix` 2x, `TestTapDrainBoundedByGrace` 4x |
+| `B-W-detached` | the Windows laptop | break | the lock, stamped, `detached` not taking it, 5 rounds, planted bounds 20, 23, 20 and 12 s | 5 | 1794896324672821, 1794896376672978, 1794896427673132, 1794896477673283, 1794896529673440 | 2026-11-17 04:40:21 | 775 | 1 | `TestBlockedTapDetached` 2x, `TestDetachedTapIsPrefix` 5x, `TestInProcessDetachedTapIsPrefix` 3x, `TestTapDrainBoundedByGrace` 1x |
+| `B-W-inproc` | the Windows laptop | break | the lock, stamped, `inproc` not taking it, 5 rounds, planted bounds 20, 23, 20 and 12 s | 5 | 1794896845674384, 1794896895674535, 1794896946674689, 1794896993674831, 1794897043674982 | 2026-11-17 04:53:16 | 512 | 1 | `TestBlockedTapDetached` 3x, `TestDetachedTapIsPrefix` 2x, `TestInProcessDetachedTapIsPrefix` 5x |
+| `B-W-drain` | the Windows laptop | break | the lock, stamped, `drain` not taking it, 5 rounds, planted bounds 20, 23, 20 and 12 s | 5 | 1794897346675887, 1794897393676029, 1794897442676177, 1794897491676325, 1794897537676464 | 2026-11-17 05:01:47 | 493 | 1 | `TestBlockedTapDetached` 1x, `TestDetachedTapIsPrefix` 2x, `TestInProcessDetachedTapIsPrefix` 1x, `TestTapDrainBoundedByGrace` 5x |
+| `C-L-pkg1` | the Linux host | confirmation | `go test -race -shuffle=on -count=5 -v -timeout=30m ./agentproc/`, the amended tree | 5 | 1794890060349632733 | 2026-11-17 04:34:06 | 256 | 0 | none |
+| `C-L-pkg2` | the Linux host | confirmation | `go test -race -shuffle=on -count=5 -v -timeout=30m ./agentproc/`, the amended tree | 5 | 1794890316318548180 | 2026-11-17 04:38:22 | 259 | 0 | none |
+| `C-L-pkg3` | the Linux host | confirmation | `go test -race -shuffle=on -count=5 -v -timeout=30m ./agentproc/`, the amended tree | 5 | 1794890575211207147 | 2026-11-17 04:42:41 | 257 | 0 | none |
+| `C-L-pkg4` | the Linux host | confirmation | `go test -race -shuffle=on -count=5 -v -timeout=30m ./agentproc/`, the amended tree | 5 | 1794890831525718310 | 2026-11-17 04:46:58 | 261 | 0 | none |
+| `C-L-mod1` | the Linux host | confirmation | CI's step: `go test -race -shuffle=on -v ./...` then `( cd cmd/generate && go test -race -shuffle=on -v ./... )`, the amended tree | 1 | one per package, `-test.shuffle` in the host's output | 2026-11-17 04:51:19 | 298 | 0+0 | none |
+| `C-L-mod2` | the Linux host | confirmation | CI's step: `go test -race -shuffle=on -v ./...` then `( cd cmd/generate && go test -race -shuffle=on -v ./... )`, the amended tree | 1 | one per package, `-test.shuffle` in the host's output | 2026-11-17 04:56:17 | 291 | 0+0 | none |
+| `C-L-mod3` | the Linux host | confirmation | CI's step: `go test -race -shuffle=on -v ./...` then `( cd cmd/generate && go test -race -shuffle=on -v ./... )`, the amended tree | 1 | one per package, `-test.shuffle` in the host's output | 2026-11-17 05:01:08 | 301 | 0+0 | none |
+| `C-W-pkg1` | the Windows laptop | confirmation | `go test -race -shuffle=on -count=5 -v -timeout=40m ./agentproc/`, the amended tree | 5 | 1794891198657718500 | 2026-11-17 04:51:14 | 383 | 0 | none |
+| `C-W-pkg2` | the Windows laptop | confirmation | `go test -race -shuffle=on -count=5 -v -timeout=40m ./agentproc/`, the amended tree | 5 | 1794891710402087000 | 2026-11-17 04:57:37 | 502 | 0 | none |
+| `C-W-pkg3` | the Windows laptop | confirmation | `go test -race -shuffle=on -count=5 -v -timeout=40m ./agentproc/`, the amended tree | 5 | 1794892204566785000 | 2026-11-17 05:05:59 | 496 | 0 | none |
+| `C-W-pkg4` | the Windows laptop | confirmation | `go test -race -shuffle=on -count=5 -v -timeout=40m ./agentproc/`, the amended tree | 5 | 1794892465258933000 | 2026-11-17 05:14:15 | 253 | 0 | none |
+| `mac-mod-1` | this Mac | confirmation | `go test -race -shuffle=on ./...`, the working tree | 1 | - | 2026-11-17 04:34:17 | 29 | 0 | none |
+| `mac-mod-2` | this Mac | confirmation | `go test -race -shuffle=on ./...`, the working tree | 1 | - | 2026-11-17 04:34:46 | 25 | 0 | none |
+| `mac-mod-3` | this Mac | confirmation | `go test -race -shuffle=on ./...`, the working tree | 1 | - | 2026-11-17 04:35:11 | 28 | 0 | none |
+
+* **The Linux host, the package, 20 rounds** (`C-L-pkg1` to `C-L-pkg4`): exit 0 each; 104 tests, 2,072 passes, 0 failures, 0
+  skips; each of the four passed in 20 of 20 rounds; no `DATA RACE`, no panic.
+* **The Linux host, the module, 3 rounds as CI's step runs it** (`C-L-mod1` to `C-L-mod3`): root and `cmd/generate` each exit 0 in
+  each round (105, 103 and 106 s, and 188, 183 and 191 s); no failure; each of the four passed in 3 of 3 rounds; `agentproc` took
+  51.8, 55.2 and 51.8 s there, against phase 4's 54.6, 51.6 and 54.9 s.
+* **The Windows laptop, the package, 20 rounds** (`C-W-pkg1` to `C-W-pkg4`): exit 0 each; 2,032 passes, 0 failures, 0 skips; each
+  of the four 20 of 20; no `DATA RACE`, no panic. The three that failed at `HEAD` passed in each round.
+* **This Mac's module race gate of record, 3 rounds** (`mac-mod-1` to `mac-mod-3`): exit 0 each, 29, 25 and 28 s; every package
+  `ok`, none cached.
+* **Every test judged; nothing counted apart.** No test failed on either host, in any round. Under the in-process starved load,
+  which this phase does not run, the four stay counted apart.
+* **No serialised test over 30 s** in any confirmation round or proof round: the longest wait to "ready" in all of this phase's
+  stamped runs with the lock was 21.4 s (the Linux host) and 20.9 s (the Windows laptop). The longest wait for the lock was 41.1 s,
+  and is not a readiness wait.
+* **The package's time with the lock, beside phase 4's.** The Windows laptop, the whole package: 42.5 s a round at `HEAD`
+  (`P-W-head`, 212.7 s for 5 rounds, which failed three tests at 30 s and so ended them early) and 50.0 s a round with the lock
+  (`P-W-lock`, 500.5 s for 10 rounds; the confirmation's 48.4 to 51.4 s): about 7.5 s a round more, against the report's estimate
+  of about 3 s. The Linux host, idle: 48.4 to 49.5 s a round (the package's `ok` time over 5 rounds, 241.8 to 247.4 s), against
+  phase 4's chunk times of 235 to 253 s: no slower. This Mac, beside the module: 23.8 to 27.8 s for `agentproc`.
+
+#### `tools/gates.py`
+
+All 18 gates exit 0, run as phase 4 ran them, in two parts, each through `run-heavy` on this Mac, so that no run of mine shared
+a host with another: the sixteen gates that are not the hosts' (`regen`, `precheck`, `newfiles`, `nojsonv2`, `winvet`,
+`records`, `mdlint`, `idscan`, `tools`, `lint`, `fix`, `tidy`, `api`, `race3`, `floor`, `platforms`), "all gates passed",
+started 05:28:52Z after 453 s in the queue behind another session's `make preflight` and ended 05:34:50Z (357 s); then
+`tools/gates.py linux windows` with the two hosts' SSH aliases in the environment, "all gates passed", 05:34:50Z to 05:38:37Z
+(227 s). The `linux` gate wrote its log at 05:36:54Z (about 124 s after the start) and the `windows` gate at 05:38:36Z (about 102
+s after that), so a reader can set them beside another session's runs on those hosts; the `linux` gate runs without `-race`, and
+its log shows `agentproc` `ok` in 16.3 s, so no F7 test failed there and there is no F7 deviation; the `windows` gate's log shows
+`agentproc` `ok` in 20.9 s. `tools/remote.py tree`, which those two gates run, does not queue on its host: none of my chunks was
+running on either host then (their chains had ended), and another session's was not checked beyond `run-heavy --status` here.
+The gates ran with this entry in the tree (its gate and checks paragraphs not yet written).
+
+#### Deviations
+
+None stops the phase. Recorded:
+
+* The brief's step 1 was extended by the coordinator, while the phase ran, with the owner's ruling "Accept it and record the
+  cause" (above); no other step changed.
+* **The Linux measured proof is step 2's series** (20 stamped module rounds), not a second series: the lock ends at "ready", so
+  the stamped scratch lock of step 2 and the amended tree's lock are the same code (checked), and a second series would have
+  repeated it.
+* **`HEAD` was run twice on the Windows laptop**, unstamped (`P-W-head`) and stamped with a no-op `bulkTurn` (`P-W-nolock-s`),
+  because the planted bound of `TestTapDrainBoundedByGrace` needs the stamps; the unstamped run is the proof that `HEAD` fails.
+* **The breaks' plants** were set from step 2's 20 rounds before the breaks ran, and the 10 rounds of `P-W-lock-s` (which ran
+  with only the drain bound planted) were then checked against them after the fact: each locked test's longest wait over 30 runs
+  is under its plant. The locked runs were not re-run with all four plants.
+* `win.sh`'s dispatch status is 0 when the package fails (it ends in `cat`); the table's Exit column is the script's own
+  `go test` status.
+
+#### Not verified
+
+* The tail beyond 20 rounds: the longest first step with the lock released at "ready" was 4.5 s of 5 s on the Linux host; a rate
+  under 1 in 20 of one over 5 s is not excluded.
+* Anything under the in-process starved load (not run, as the phase says), on the Windows laptop under any load but its own
+  package's, and on FreeBSD (`go vet` only).
+* CI: the six jobs on the commit are the coordinator's after the commit; CI's own time with and without `-race` after the lock.
+* Why the Windows laptop slows with the number of tests, and why the lock adds about 7.5 s there, not 3 s: not isolated.
+* The stamps' own cost (a few `time.Now` calls and one small append per event); the stamped lock rounds took 47 to 53 s each on
+  the Windows laptop against 50.0 s a round unstamped.
+* `-parallel=16`'s effect under `-race` or on another host (one run, five rounds, no `-race`).
+
+#### Files, checks and staging
+
+Changed: `agentproc/agentproc_test.go`, `agentproc/inprocess_test.go`, `agentproc/tap_test.go`, `docs/architecture.md`,
+`CHANGELOG.md`, `docs/README.md`, this PLAN (this entry, and the additions above) and the MADR (the additions above). Not
+changed: any source, workflow, script or tool. Scratch only: the trees, the scripts, the chunk outputs (`<scratch>`).
+Checks, after the last change to any test file (the three files' modification times 22:33:23 to 22:33:24 CST, 04:33Z): `make
+pre-add-check FILES="agentproc/agentproc_test.go agentproc/inprocess_test.go agentproc/tap_test.go"` through `run-heavy` on this
+Mac, 23:02:23 to 23:04:15 CST (112 s), exit 0 ("3 file(s) gofmt-clean; both modules linted, vetted and tested (-race
+-shuffle=on, uncached), tidy, govulncheck"); `go vet ./agentproc/`, `GOOS=windows go vet ./agentproc/` and `GOOS=freebsd go vet
+./agentproc/`, each exit 0. After the last record edit, with the files staged: `make check-records`, exit 0; `make markdownlint`, exit 0 ("Linting: 58 files", "0 issues in 0 files"); `make disclosure-check`, exit 0 ("843 tracked file(s), 0 finding(s)"); a scan of the staged additions for the hosts' names, the local account name, real-machine paths and queue tickets found none. Run twice, the second time after this paragraph was written, with the same results.
+Staged, not committed, not pushed.

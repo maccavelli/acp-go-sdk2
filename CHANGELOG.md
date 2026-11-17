@@ -5,6 +5,13 @@
 - Made `agentproc`'s tests that need an agent's exit seen within a grace run under a grace of 3 s (`exitGrace`), and
   rescaled five bounds that are not a grace (`burstWait` 35 s, `tapErrorWait` 39 s, `tappedFramesGrace` 28 s,
   `lastOutputGrace` 42 s, `releasedWait` 35 s), so a loaded runner under `-race` no longer fails them; tests only.
+- Made the four `agentproc` tests that read 24 to 56 MiB through the connection (`TestBlockedTapDetached`,
+  `TestDetachedTapIsPrefix`, `TestInProcessDetachedTapIsPrefix`, `TestTapDrainBoundedByGrace`) read them one test at a
+  time, under a test-only lock, so that the Windows laptop's package run and a four-CPU Linux host beside the module no
+  longer wait past their 30 s bound for each other's reads under `-race`; tests only. `agentproc`'s time in CI's step
+  without `-race` rose from about 8 s to about 20 s with the graces of the item above: seventeen tests and subtests each
+  sit a grace out by design, and the grace went from 300 ms to 3 s
+  ([0057-MADR](docs/decisions/0057-MADR-agentproc-test-graces-on-a-loaded-runner.md)).
 - Added the documentation defect list,
   [0056-REPORT-documentation-defect-list.md](docs/reports/0056-REPORT-documentation-defect-list.md): every statement
   in the repository's docs that the code contradicts, every feature no doc describes, and every exported member with no

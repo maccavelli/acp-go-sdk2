@@ -270,6 +270,8 @@ measurement. The two 56 MiB tests stay with phase 5's report.
   *Annotated 2026-11-16, after phase 5's report:* true of a test whose wait ends when the exit is seen; not of a test that waits
   a grace, or a bound stated in graces, out by design, which now waits 3 s where it waited 300 ms. `agentproc`'s time in CI's
   step without `-race` rose from about 8 s to about 20 s at `f102c5a` (the amendment "after phase 5's report", below).
+  *Added 2026-11-16, at phase 6, step 1, which measured it:* the cause, the table and the owner's ruling, relayed by the
+  coordinator, "Accept it and record the cause", are in "The rise without `-race`, explained", below.
 * Neutral, because the product's behaviour and its default grace do not change; its docs say what the code does, by question 4's answer.
 * Bad, because a test that waits a grace out and then needs an exit seen within the next, as `TestCloseLadder/exits_on_SIGTERM`
   does, then takes about `slack`, 3 s, a run instead of 300 ms; it runs in parallel with the package's others.
@@ -283,6 +285,53 @@ measurement. The two 56 MiB tests stay with phase 5's report.
   and `TestBlockedTapDetached`'s readiness aside, which phase 5's report measures.
 * *Added 2026-11-16:* Bad, because a bound that is not a grace may not admit a figure that both follows from measurement and keeps
   its test able to fail on its defect; such a bound stops the PLAN for the owner.
+
+
+### The rise without `-race`, explained
+
+*Added 2026-11-16, at phase 6, step 1.* Measured on the Linux host, without `-race`, `go test -json -shuffle=on -count=5
+./agentproc/` at `032320a` and at `f102c5a`, medians of five rounds: the package took 41.1 s over the five rounds before
+(8.2 s a round) and 100.6 s after (20.1 s a round), against CI's step at 7.4 to 9.6 s before and 20.4 to 21.1 s after (the
+report). Seventeen tests and subtests, leaves with no subtests of their own, grew by 0.5 s or more; none of the other 78 grew by 0.1 s.
+The sum of the 95 leaves' medians rose from 27.8 s to 74.8 s, 47.0 s of it in the seventeen; at four tests at once
+(`-parallel`'s default on four CPUs) that is 11.75 s, against the package's rise of 11.9 s a round.
+
+| Test or subtest | Before (`032320a`), s | After (`f102c5a`), s | Growth, s | The wait it sits out |
+| :--- | ---: | ---: | ---: | :--- |
+| `TestInProcessKill` | 0.60 | 6.00 | 5.40 | two graces: the first step (Serve ignores its input's end) and the second (it ignores its context), then the kill (`inprocess_test.go:131`) |
+| `TestBlockedTapDetached` | 0.77 | 3.49 | 2.72 | `Close`'s drain of a tap still blocked when the agent has exited, bounded by the grace (`tap_test.go`) |
+| `TestCloseContextBoundsHandlers/in_process,_CloseContext` | 0.30 | 3.00 | 2.70 | `const bound = exitGrace`: the context's bound, which a handler that ignores its context outlasts (`closecontext_test.go`) |
+| `TestCloseContextBoundsHandlers/in_process,_KillContext` | 0.30 | 3.00 | 2.70 | the same bound, `exitGrace` |
+| `TestCloseContextCause` | 0.30 | 3.00 | 2.70 | the context's timeout, `exitGrace`, outlasted by a handler that ignores its context |
+| `TestCloseContextJoinsTheAgentsError` | 0.30 | 3.00 | 2.70 | the context's timeout, `exitGrace`, outlasted by a handler that ignores its context |
+| `TestInProcessTerminate` | 0.30 | 3.00 | 2.70 | the first step, one grace (Serve ignores its input's end), then the second step ends it |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_returning_its_cause` | 0.30 | 3.00 | 2.70 | the first step, one grace, then step 2 |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_returning_its_own_error` | 0.30 | 3.00 | 2.70 | the first step, one grace, then step 2 |
+| `TestWaitErrorSaysTheCauseOnce/step_2,_Serve_wrapping_its_cause` | 0.30 | 3.00 | 2.70 | the first step, one grace, then step 2 |
+| `TestCloseContextBoundsHandlers/a_child,_CloseContext` | 0.33 | 3.03 | 2.70 | the same bound, `exitGrace` |
+| `TestCloseLadder/exits_on_SIGTERM` | 0.31 | 3.01 | 2.70 | the first step, one grace (the agent ignores its input's end), then SIGTERM, which it exits on (class B) |
+| `TestCloseContextBoundsHandlers/a_child,_KillContext` | 0.32 | 3.01 | 2.69 | the same bound, `exitGrace` |
+| `TestTapDrainBoundedByGrace` | 0.58 | 3.23 | 2.65 | the same drain of a blocked tap, bounded by the grace (`tap_test.go`) |
+| `TestEscapedDescendantDoesNotHoldWait` | 0.83 | 3.43 | 2.60 | the watcher's grace for an escaped descendant's hold on the agent's output (`agentproc_unix_test.go:92`) |
+| `TestTapKeepsCloseEnding` | 0.43 | 3.03 | 2.60 | the same watcher's grace, with an output tap (`agentproc_unix_test.go:120`) |
+| `TestCloseContextWaitsForHandlers` | 0.15 | 1.50 | 1.35 | the handler's release, `exitGrace/2`, which `CloseContext` waits for |
+| 17 tests and subtests | | | 47.01 | |
+
+**The cause, in one sentence:** each of the seventeen sits a whole grace out by design (the agent is meant not to exit in
+the first step, a handler is meant to ignore its context, or a tap is meant to stay blocked), and the grace went from 300 ms
+to 3 s. The product has one grace for every step of `Close` (`Process.grace`: the first step, the second, the watcher's wait
+on the agent's output and the taps' drain), so a test that needs the exit seen within the second step cannot skip the first
+step's wait, and a test that needs a drain bounded by the grace waits it out.
+
+**What was considered.** Nothing that keeps every test as it is shortens the package's wall time except running more of its
+tests at once: `-parallel=16`, in a scratch run on the Linux host without `-race`, 5 rounds, took the package to 6.8 s a
+round, under the 8.2 s before; it changes CI's command, not a test. A shorter grace for the seventeen (for example 1.5 s)
+changes the tests. **The owner's ruling, relayed by the coordinator, "Accept it and record the cause".** As put to the owner:
+about 12 s more CI per run is the measured price of the fix; phase 6 records the per-test table and the reason in the PLAN and
+this record; nothing changes in the tests or CI, and the margin against the original flake stays at five times. Options not
+chosen: a shorter grace for the tests that sit one out (for example 1.5 s, cutting their margin against a loaded runner from
+about five times to about two); run more of the package's tests at once in CI (a workflow change that puts more load on the
+timing-sensitive tests). No reduction is made, and no further question about it is open.
 
 ### Confirmation
 
@@ -574,3 +623,9 @@ From the report, which holds the measurements; nothing here is measured again:
      Cost: a gate resting on 20 rounds, where the Linux host's unlocked failure rate was 2 in 10.
    * (c) Keep the four counted apart on both hosts, as evidence, until a longer series (for example 50 rounds each) is run. Cost:
      the lock's effect stays unjudged in the gates.
+
+   * **Answered (a), 2026-11-16,** the owner's ruling, relayed by the coordinator: "Judge them like every other test there". As
+     put to the owner: a failure of one of the four on the Linux host or the Windows laptop stops a phase, as for any test; the
+     race gate of record stays this Mac's; under the artificial starved load they stay counted apart whatever is chosen. Options
+     not chosen: also make those two runs gates of record; keep them counted apart until a longer series. It takes effect when
+     phase 6's confirmation has passed, as the PLAN says.
