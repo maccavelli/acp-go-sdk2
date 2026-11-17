@@ -629,3 +629,33 @@ From the report, which holds the measurements; nothing here is measured again:
      race gate of record stays this Mac's; under the artificial starved load they stay counted apart whatever is chosen. Options
      not chosen: also make those two runs gates of record; keep them counted apart until a longer series. It takes effect when
      phase 6's confirmation has passed, as the PLAN says.
+
+
+## Amendment 2026-11-17, after the longer series on `Close`'s first step
+
+*Added 2026-11-17, by the owner's ruling, relayed by the coordinator, "Measure a longer series first", on the 20-round figure of the
+amendment "after phase 5's report" (4.5 s of the 5 s at worst; a rate under 1 in 20 not excluded). As put to the owner: 100
+module rounds on the Linux machine with the close's first step stamped, records only; if none exceeds 5 s the margin is recorded
+and the plan closes; if one does, the plan's own alternate branch applies and the lock is held through `Close`. Options not
+chosen: hold the lock through `Close` now; accept it as measured. The PLAN's execution record has the chunks, the seeds and the
+rounds ("2026-11-17: phase 6, step 2 again").*
+
+* **What was measured.** `HEAD` (`e93587c`) with phase 6's stamps and nothing else changed, 100 module rounds under `-race` on the
+  Linux host, each round's own shuffle seed. In 4 of the 100 rounds one of the two 56 MiB tests failed at `Close`'s first step:
+  its 5 s grace ended without the agent's exit seen, SIGTERM followed, and `Close` returned `agentproc: agent terminated`
+  (`TestDetachedTapIsPrefix` 3 times, `TestInProcessDetachedTapIsPrefix` once). A fifth first step ended at 5.001 s with the exit
+  seen. No other test failed in any round. The first step's median was 2.5 s and 2.8 s, its 95th percentile 4.5 s and 4.6 s;
+  31 of the 200 steps took over 4.0 s, 5 over 5.0 s; 4 of 100 rounds is 1.4 % to 8.9 % at the one-sided 95 % level.
+* **What it changes.** The fact the amendment "after phase 5's report" left open, whether the lock must also cover the two tests'
+  last 8 MiB, is answered: it must. A first step over the 5 s grace occurs at a rate that stops a phase under the owner's ruling
+  "Judge them like every other test there", and every first step over 4.0 s in the series, and every one of the five over 5 s,
+  ran while another of the four bulk tests was in its own reading window. The decision "never read their megabytes at once"
+  covers those last 8 MiB, so the PLAN's alternate branch applies: the lock is held through `Close`'s return for the two 56 MiB
+  tests. The 5 s grace is not raised. The branch is not built by this note; it is a test change, briefed separately, and the
+  PLAN's step 2 has its proof (the same rounds again, with the lock held through `Close`).
+* **Consequence, beside the neutral one above (which stands as written).** The lock's cost grows by the two tests' `Close`, 2.9 s
+  and 3.2 s at the median and 5.8 s at most in the series, held in turn:
+  the package's time rises a little more, and a test waiting for the lock holds one of the package's parallel slots while it
+  waits, as before. The lock ending at "ready", as the report measured it and as `HEAD` has it, does not stand.
+* **Confirmation.** The rounds of step 2 again with the lock held through `Close`: the stamped first step and `Close`'s total in
+  every round, none over 5 s, none failing. 0 of 100 would exclude a rate above 3.0 % at that level, not a lower one.

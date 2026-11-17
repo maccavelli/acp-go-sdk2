@@ -2628,6 +2628,8 @@ None stops the phase. Recorded:
 
 * The tail beyond 20 rounds: the longest first step with the lock released at "ready" was 4.5 s of 5 s on the Linux host; a rate
   under 1 in 20 of one over 5 s is not excluded.
+  *Added 2026-11-17:* measured over 100 further module rounds ("2026-11-17: phase 6, step 2 again", below): 4 of 100 rounds failed at
+  `Close`'s first step, the 4.5 s was not the tail, and the alternate branch of step 2 applies.
 * Anything under the in-process starved load (not run, as the phase says), on the Windows laptop under any load but its own
   package's, and on FreeBSD (`go vet` only).
 * CI: the six jobs on the commit are the coordinator's after the commit; CI's own time with and without `-race` after the lock.
@@ -2647,3 +2649,122 @@ Mac, 23:02:23 to 23:04:15 CST (112 s), exit 0 ("3 file(s) gofmt-clean; both modu
 -shuffle=on, uncached), tidy, govulncheck"); `go vet ./agentproc/`, `GOOS=windows go vet ./agentproc/` and `GOOS=freebsd go vet
 ./agentproc/`, each exit 0. After the last record edit, with the files staged: `make check-records`, exit 0; `make markdownlint`, exit 0 ("Linting: 58 files", "0 issues in 0 files"); `make disclosure-check`, exit 0 ("843 tracked file(s), 0 finding(s)"); a scan of the staged additions for the hosts' names, the local account name, real-machine paths and queue tickets found none. Run twice, the second time after this paragraph was written, with the same results.
 Staged, not committed, not pushed.
+
+### 2026-11-17: phase 6, step 2 again: the first step of `Close` over 100 module rounds
+
+Run by a mainstream-tier model at medium effort, on the coordinator's brief. Base commit `e93587c`, `main`, level with
+`origin/main`, tree clean at the start. Records only: no source, test, workflow or tool changed, and the lock, the graces and the
+sizes stand as phase 6 committed them. `date +%F` printed 2026-11-17; the times below are UTC.
+
+* **The ruling.** The owner's ruling, relayed by the coordinator, "Measure a longer series first". As put to the owner: 100 module
+  rounds on the Linux machine with the close's first step stamped, records only; if none exceeds 5 s the margin is recorded with
+  its distribution and the plan closes; if one does, the plan's own alternate branch applies and the lock is held through
+  `Close`; about two hours of that machine; no test changes unless the measurement calls for one. Options not chosen: hold the
+  lock through `Close` now; accept it as measured. The reason it was asked: step 2 above measured 4.5 s at worst in 20 rounds, so
+  a failure rate under 1 in 20 was not excluded, and a failure of either test now stops a phase ("Judge them like every other
+  test there").
+* **What was run.** A scratch copy of `HEAD` (`git archive`), with phase 6's stamps (`mk_stamps.py`, the same script) on the two
+  56 MiB tests and on `Process.stop`, and nothing else changed: the lock as committed (`bulkLock`, released at "ready"; the
+  stamped `bulkTurn` takes the same mutex and stamps around it, checked in a diff of the copy against `HEAD`), the graces as
+  written, no bound lifted, no planted bound set. A first step that exceeds 5 s therefore shows as the stamp and as the test's
+  own failure. **The stamp is the same one as step 2's:** `Process.stop` stamps `input_closed` right after `closeInput` returns
+  and `step1_end` when `exitedWithin(grace)`, `Close`'s first step, returns, with whether it returned true (the exit seen);
+  the first step's duration is `step1_end` minus `input_closed`, read per `Process` and so per test. A first step that returns
+  false is stamped at the grace, 5.000 s and a little more, and ends in SIGTERM and `ErrTerminated`: the duration is then
+  censored at 5 s, not measured. The test's `Close` call and return are stamped too.
+* **The command.** CI's step is `go test -race -shuffle=on ./...` then `( cd cmd/generate && go test -race -shuffle=on ./... )`
+  (`.github/workflows/ci.yml`, the `race detector` step). The stamps are in the root module only, so, as in step 2, each round is
+  `go test -race -shuffle=SEED -count=1 ./...` in the root module, with `SEED` the round's own (the host's `date +%s` times
+  1000003, plus the round's number), on the host as it is (4 CPUs, Go 1.27.4); `cmd/generate` was not run. Each chunk is `run-on-host --need linux --race -- sh _tools/run.sh mod NAME 1 10` (10 rounds; the make-up chunk 1), never
+  a WSL distro, one at a time, through the queue. The host-side script writes its own output, stamps (`zz_NAME.jsonl`) and
+  per-round outputs on the host, which is how chunk `C08` was recovered.
+* **Every chunk, none re-run to replace a result.** "Wait" is the queue's own `waited=` for the ticket; "others" says whether the
+  queue's status, polled every 30 s on this Mac while the chunk waited and ran, listed another session's run. The status does not
+  name the host a listed run is on, and my own tickets were not listed as running in it: so a listed run is known to have been
+  in the queue, not known to have been on the Linux host. In the three chunks that waited, the queue's line named another
+  session's run ahead of the ticket.
+
+| Chunk | Rounds | Seeds | Start (UTC) | Seconds | Queue wait | Exit | Polls listing another run | Failed tests | End (UTC) |
+| :--- | :--- | :--- | :--- | ---: | ---: | :--- | :--- | :--- | :--- |
+| `C01` | 10 | 1794925323759818, 1794925453760209, 1794925540760471, 1794925625760727, 1794925712760989, 1794925809761281, 1794925909761582, 1794926005761871, 1794926098762151, 1794926191762431 | 2026-11-17 12:52:15 | 969s | 0s | rounds 0; dispatcher 0 | 3 of 33 | none | 2026-11-17 13:08:23 |
+| `C02` | 10 | 1794926292762725, 1794926412763086, 1794926504763363, 1794926597763643, 1794926689763920, 1794926784764206, 1794926876764483, 1794926963764745, 1794927048765001, 1794927135765263 | 2026-11-17 13:08:23 | 938s | 0s | rounds 0; dispatcher 0 | 0 of 32 | none | 2026-11-17 13:24:02 |
+| `C03` | 10 | 1794927495766334, 1794927629766737, 1794927724767023, 1794927818767306, 1794927915767598, 1794928005767869, 1794928098768149, 1794928194768438, 1794928292768733, 1794928385769013 | 2026-11-17 13:24:02 | 1244s | 0s | rounds 0; dispatcher 0 | 28 of 42 | none | 2026-11-17 13:44:46 |
+| `C04` | 10 | 1794928475769274, 1794928590769620, 1794928677769882, 1794928762770138, 1794928856770421, 1794928953770713, 1794929047770996, 1794929139771273, 1794929232771553, 1794929323771827 | 2026-11-17 13:44:46 | 941s | 0s | rounds 0; dispatcher 0 | 19 of 32 | none | 2026-11-17 14:00:27 |
+| `C05` | 10 | 1794929664772841, 1794929792773226, 1794929889773518, 1794929992773828, 1794930088774117, 1794930181774397, 1794930276774683, 1794930370774966, 1794930464775249, 1794930560775538 | 2026-11-17 14:00:27 | 1248s | 0s | rounds 0,1; dispatcher 0 | 28 of 42 | round 3 `TestInProcessDetachedTapIsPrefix`; round 10 `TestDetachedTapIsPrefix` | 2026-11-17 14:21:15 |
+| `C06` | 10 | 1794930664775841, 1794930785776205, 1794930877776482, 1794930971776765, 1794931069777060, 1794931152777310, 1794931244777587, 1794931330777846, 1794931415778102, 1794931516778406 | 2026-11-17 14:21:15 | 952s | 0s | rounds 0,1; dispatcher 0 | 20 of 32 | round 4 `TestDetachedTapIsPrefix` | 2026-11-17 14:37:07 |
+| `C07` | 10 | 1794931879779486, 1794931996779838, 1794932085780106, 1794932183780401, 1794932279780690, 1794932371780967, 1794932469781262, 1794932561781539, 1794932647781798, 1794932739782075 | 2026-11-17 14:37:07 | 1212s | 0s | rounds 0; dispatcher 0 | 27 of 41 | none | 2026-11-17 14:57:19 |
+| `C08` | 9 delivered, 10th recovered | 1794932828782333, 1794932935782655, 1794933032782947, 1794933119783209, 1794933212783489, 1794933309783781, 1794933401784058, 1794933494784338, 1794933588784621 | 2026-11-17 14:57:19 | 950s | 0s | rounds 0; dispatcher 255 (lost) | 30 of 31 | none | 2026-11-17 15:13:09 |
+| `C09` | 10 | 1794933779785186, 1794933906785568, 1794933999785848, 1794934093786131, 1794934190786423, 1794934276786682, 1794934367786956, 1794934455787221, 1794934552787513, 1794934646787796 | 2026-11-17 15:13:09 | 968s | 0s | rounds 0,1; dispatcher 0 | 15 of 33 | round 8 `TestDetachedTapIsPrefix` | 2026-11-17 15:29:17 |
+| `C10` | 10 | 1794934746788087, 1794934876788478, 1794934970788761, 1794935062789038, 1794935156789321, 1794935249789601, 1794935343789884, 1794935439790173, 1794935535790462, 1794935627790739 | 2026-11-17 15:29:17 | 985s | 0s | rounds 0; dispatcher 0 | 31 of 33 | none | 2026-11-17 15:45:42 |
+| `C11` | 1 | 1794935807791270 | 2026-11-17 15:46:58 | 130s | 0s | rounds 0; dispatcher 0 | 3 of 5 | none | 2026-11-17 15:49:08 |
+
+* **Chunk `C08` was lost to infrastructure** (the dispatcher's SSH connection ended with status 255 at 15:13:09, after round 9's
+  result was delivered, in round 10's last seconds). Recovered from the host's own files: the stamps of all ten rounds
+  (`zz_C08.jsonl`) and each round's `go test` output (`mod-1.txt` to `mod-10.txt`), none showing a failure; round 10's seed and
+  exit-status line were never delivered and are not recovered, so its pass is read from its output (every package `ok`, no
+  `FAIL`) and not from a status. Round 10's first steps, recovered: 4.29 s (`TestDetachedTapIsPrefix`) and 2.83 s
+  (`TestInProcessDetachedTapIsPrefix`), the exit seen in both. **One round was made up in a new chunk, `C11`, and both are kept:**
+  the statistics below are over the 100 rounds whose result line was delivered (C01 to C07, C08's rounds 1 to 9, C09, C10,
+  C11); including C08's recovered round 10 (101 rounds) changes no count over 4.0 s, and none over 5.0 s.
+* **Rounds, and what failed.** 100 module rounds delivered (101 run, with `C08`'s recovered tenth). 96 rounds passed every test;
+  **4 rounds failed, each in one of the two tests, each at `Close`'s first step, and nothing else failed in any round** (no other
+  test failed, no `DATA RACE`, no panic, in any chunk, the recovered files included):
+
+  | Chunk, round | Seed | Test | Failure message | Test's time | First step | Exit seen |
+  | :--- | :--- | :--- | :--- | ---: | ---: | :--- |
+  | `C05`, 3 | 1794929889773518 | `TestInProcessDetachedTapIsPrefix` | `inprocess_test.go:490: Close = agentproc: agent terminated` | 26.10 s | 5.004 s | no |
+  | `C05`, 10 | 1794930560775538 | `TestDetachedTapIsPrefix` | `tap_test.go:423: Close = agentproc: agent terminated` | 28.56 s | 5.001 s | no |
+  | `C06`, 4 | 1794930971776765 | `TestDetachedTapIsPrefix` | `tap_test.go:423: Close = agentproc: agent terminated: signal: terminated` | 21.10 s | 5.000 s | no |
+  | `C09`, 8 | 1794934455787221 | `TestDetachedTapIsPrefix` | `tap_test.go:423: Close = agentproc: agent terminated: signal: terminated` | 19.25 s | 5.001 s | no |
+
+  A fifth first step is over 5 s and passed: `C02`, round 2, seed 1794926412763086, `TestInProcessDetachedTapIsPrefix`, 5.001 s
+  with the exit seen (the check at the grace's end saw it). Each failure is the first step ending without the exit seen, then
+  SIGTERM and `ErrTerminated`, as step 2 describes it.
+* **The first step, over the 100 delivered rounds** (seconds, from `input_closed` to `step1_end`; a first step that ends at
+  5.0 s is censored there):
+
+  | Test | Min | Median | p90 | p95 | p99 | Max | Over 4.0 s | Over 4.5 s | Over 5.0 s | Exit not seen |
+  | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | `TestDetachedTapIsPrefix` | 0.000 | 2.49 | 4.08 | 4.51 | 5.00 | 5.001 | 12 | 6 | 3 | 3 |
+  | `TestInProcessDetachedTapIsPrefix` | 0.000 | 2.82 | 4.25 | 4.62 | 5.00 | 5.004 | 19 | 7 | 2 | 1 |
+
+  Half-second bins, the number of rounds in each (a bin not listed is empty; "0.0" is a first step that ended as it began, the
+  agent having exited before its input was closed; the 5.0 bin is the first steps that ended at the grace):
+
+  | Bin, s | 0.0 | 1.5 | 2.0 | 2.5 | 3.0 | 3.5 | 4.0 | 4.5 | 5.0 |
+  | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | `TestDetachedTapIsPrefix` | 11 | 20 | 19 | 18 | 10 | 10 | 6 | 3 | 3 |
+  | `TestInProcessDetachedTapIsPrefix` | 8 | 9 | 21 | 18 | 10 | 15 | 12 | 5 | 2 |
+
+  The percentiles are linear interpolations over the 100; p99 and the maximum are read on three and two censored values.
+* **What the tail shows, and what 0 of 100 would have said.** The distribution has no gap below the grace: in the last three
+  half-second bins before it, 9 of 100 and 17 of 100 first steps (4.0 to 5.0 s) for the two tests, and 3 and 2 at it. Four
+  failed rounds of 100 is 4 %, 1.4 % to 8.9 % at the one-sided 95 % level (exact binomial); per test, 3 of 100 and 1 of 100.
+  Step 2's 0 of 20 is compatible with a rate of that size (a 4 % rate gives 0 of 20 in about 44 % of series). Had 0 of 100 been
+  seen, it would have excluded a rate above 3.0 % at the one-sided 95 % level, and nothing below 3.0 %: a rate of 1 in 50 would
+  still have been possible. Beyond what was measured nothing is claimed: the tail is observed up to the grace and cut there, and
+  the rate under any other load than this host's own was not measured.
+* **Beside another bulk test.** For every first step of the two tests, whether another of the four was in its own reading window
+  (from taking the lock to releasing it, or, for the other 56 MiB test, to its `Close`'s return) while the first step ran:
+  over the 101 rounds each (`C08`'s recovered tenth included), all 32 first steps over 4.0 s (13 and 19) had one, and 116 of the
+  170 under 4.0 s (54 of 88 and 62 of 82) did; each of the 4 failures and the one passing 5.001 s had exactly one. Whose window it was, in the five: `TestBlockedTapDetached`,
+  `TestInProcessDetachedTapIsPrefix` (twice), `TestTapDrainBoundedByGrace` (twice). That is an association in 200 first steps,
+  not a cause isolated. The host's one-minute load average at the end of each of the four failing rounds was 2.3 to 2.7, in the
+  range of the other rounds' (median 2.3, 3.3 at most over 121 round ends).
+* **The outcome.** The first step of `Close` exceeded 5 s in 5 of the 200 first steps measured in the delivered rounds, and in
+  4 of them ended in the test's own failure. **That is the second bullet of step 2** ("If one does, the lock is held through
+  `Close`'s return for the two 56 MiB tests ... and the same rounds are run again"): **the plan's alternate branch applies.** It
+  is not built here: it is a test change (`done()` after `Close` in `TestDetachedTapIsPrefix` and
+  `TestInProcessDetachedTapIsPrefix`), which the coordinator briefs separately, and the stop "a 56 MiB test's `Close` over its 5 s
+  with the lock held through it" has not been tried. The rule "the lock ends at ready" does not stand on this measurement.
+* **Checks of the stamp and of the method.** `go vet` of the stamped copy, exit 0, and the two tests run once on this Mac, exit
+  0, 20 stamps written. No bound was planted and the 30 s and 5 s are as committed. The first-step stamps pair by the `Process`
+  pointer within a round; each of the 202 first steps (101 rounds, two tests) had its pair, none missing. 11 and 8 first steps under 0.5 s are the agent having exited before its input was closed, not a stamp fault.
+* **Not verified.** The rate under CI's own load (only this host, one session's other runs beside it, a one-minute load average
+  of 2.3 at the median at round ends); the Windows laptop and this Mac; `cmd/generate`'s part of CI's step; that the lock held
+  through `Close` removes the failures (the alternate branch's own rounds are the proof, and are not run here); `C08` round 10's
+  seed and exit status; which other test's window caused any of the five (association only). CI on the commit is the
+  coordinator's.
+
+Files: this entry, and the MADR's note below it. Scratch only: the stamped copy, its scripts, the chunks' outputs and the
+recovered `C08` files (`<scratch>`). Staged, not committed, not pushed. The plan's status is not set by this entry.
