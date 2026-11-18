@@ -1,6 +1,6 @@
 ---
-status: in-progress
-date: 2026-11-16
+status: complete
+date: 2026-11-18
 associated-madr: "0057-MADR-agentproc-test-graces-on-a-loaded-runner.md"
 ---
 
@@ -3097,3 +3097,20 @@ finding(s)"); a scan of the staged additions for the hosts' names, the local acc
 found none. Run twice, the second time after this paragraph was written, with the same results.
 
 Staged, not committed, not pushed. The plan's status is not set by this entry: the coordinator's commit and CI come first.
+
+### 2026-11-18: the plan is complete
+
+Written on the coordinator's brief, after the phase's commit and CI. The entry of 2026-11-17 left the status to the coordinator; it is set here. `date +%F` printed 2026-11-18.
+
+* **The work.** Committed as `b8b4145`.
+* **CI on that commit.** The CI run on `b8b4145` completed with its six `validate` jobs successful: `validate (ubuntu-24.04, 1.26.11)`, `validate (ubuntu-24.04, 1.27.4)`, `validate (windows-2025, 1.26.11)`, `validate (windows-2025, 1.27.4)`, `validate (macos-15, 1.26.11)` and `validate (macos-15, 1.27.4)`. The Docs run on `b8b4145` completed successfully.
+* **Acceptance, criterion by criterion, as phase 6 words it.** Each has its evidence in this record; none lacked a location.
+  * "every step's result recorded": steps 1 and 2 under "2026-11-16: phase 6" (`#### Step 1`, `#### Step 2`) and the 2026-11-17 entries "phase 6, step 2 again" and "phase 6, the alternate branch"; steps 3 to 5 under the 2026-11-16 entry ("The lock as built", "The proof", "The breaks", "The docs") and the alternate-branch entry ("The change", "The docs"); step 6 under the alternate-branch entry's "The confirmation"; step 7's CI in this entry, and `agentproc`'s time without `-race` in step 1 and with `-race` in the alternate-branch entry's "The confirmation".
+  * "each of the four fails at `HEAD` and passes with the lock as step 4 says": the 2026-11-16 entry's "The proof". On the Windows laptop, `HEAD` fails `TestBlockedTapDetached`, `TestDetachedTapIsPrefix` and `TestInProcessDetachedTapIsPrefix` in 5 of 5 rounds, and the planted bound fails `TestTapDrainBoundedByGrace` in 5 of 5; with the lock, all four pass in 10 of 10 rounds.
+  * "the break fails": the 2026-11-16 entry's "The breaks: one of the four does not take the lock" (each break fails its own test in 5 of 5 rounds).
+  * "in step 6 no test fails on the Linux host or the Windows laptop, the four included, and none of the four waits over 30 s": the alternate-branch entry's "The confirmation" (no failure in 20 Linux package rounds, 3 Linux module rounds and 20 Windows package rounds; the longest wait to "ready" was 25.1 s on the Linux host and 19.1 s on the Windows laptop).
+  * "this Mac's gate passes 3 of 3": the same section (`mac-mod-1` to `mac-mod-3`, each exit 0).
+  * "the gates pass": the alternate-branch entry's "`tools/gates.py`" (all 18 gates exit 0).
+  * "CI's six jobs 'completed success'": the CI bullet above.
+* The starved in-process load was not run, as step 6 says; the four stay counted apart under it, as the PLAN's "Where the race gates run" sections set.
+* **The plan is complete.** Its status is `complete` here and in its `docs/README.md` row, and its `date` is 2026-11-18.
