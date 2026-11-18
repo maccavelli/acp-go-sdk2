@@ -88,7 +88,7 @@ vet: ## Runs go vet
 lint: ## Runs golangci-lint for the host and for GOOS=windows
 	@if [ ! -x "$(GOLANGCI_LINT)" ]; then \
 		echo "golangci-lint not found at $(GOLANGCI_LINT)"; \
-		echo "Install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0"; \
+		echo "Install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0"; \
 		exit 1; \
 	fi
 	@status=0; \

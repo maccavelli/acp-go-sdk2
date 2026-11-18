@@ -981,7 +981,7 @@ The Makefile's other targets, each with what it runs and whether CI runs it:
 - `make lint` runs golangci-lint, at `GOLANGCI_LINT`, with `.golangci.yml`
   over both modules, for the host's `GOOS` and for `windows`, and stops with the
   install command when the binary is missing. CI runs it, on Linux but not at
-  the floor Go, with `GOLANGCI_LINT` set to the golangci-lint v2.14.0 it
+  the floor Go, with `GOLANGCI_LINT` set to the golangci-lint v2.15.0 it
   installs.
 - `make tidy` runs `go mod tidy` in both modules, which rewrites `go.mod` and
   `go.sum`. CI and `make pre-add-check` run `go mod tidy -diff`, which writes

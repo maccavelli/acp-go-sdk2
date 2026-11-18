@@ -13,7 +13,7 @@ code, helper APIs, and library version remain in sync.
   "schema/version read as empty", and the docs gates still run. Homebrew
   installs this binary as `gmake`.
 - Go at the version in the `go` line of `go.mod`.
-- `gofmt`, `golangci-lint` v2.14.0, and `make pre-add-check`.
+- `gofmt`, `golangci-lint` v2.15.0, and `make pre-add-check`.
 - `mdsh`, which `make version` runs to rewrite `README.md` (`make version
   MDSH=path` names another binary).
 
