@@ -104,3 +104,7 @@ The owner said this repository is committed on `main` most of the time. `AGENTS.
 and saying that an agent does not commit, push, or merge on `main` because the organization's git rule forbids it. That paragraph is a named
 difference from the workspace-scaffolding `AGENTS.md` template, outside its three slots. A scaffold refresh keeps it.
 [0007-PLAN-self-contained-acp-sdk.md](0007-PLAN-self-contained-acp-sdk.md) applies the same policy to the plans that are open.
+
+### Amendment 2026-11-18, linter version
+
+[0058-MADR-pin-golangci-lint-2-15-0.md](0058-MADR-pin-golangci-lint-2-15-0.md) supersedes the `golangci-lint` v2.14.0 pin for the version only; the lint gate itself stands.
